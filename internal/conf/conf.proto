@@ -1,0 +1,93 @@
+syntax = "proto3";
+package kratos.api;
+
+option go_package = "pt/internal/conf;conf";
+
+import "google/protobuf/duration.proto";
+
+
+message Bootstrap {
+  Server server = 1;
+  Data data = 2;
+}
+
+message Server {
+  message HTTP {
+    string network = 1;
+    string addr = 2;
+    google.protobuf.Duration timeout = 3;
+  }
+  message GRPC {
+    string network = 1;
+    string addr = 2;
+    google.protobuf.Duration timeout = 3;
+  }
+  HTTP http = 1;
+  GRPC grpc = 2;
+}
+
+message Data {
+  Mysql mysql = 1;
+  Redis redis = 2;
+}
+
+
+
+
+
+message Redis {
+  string                   network              = 1;
+  string                   addr                 = 2;
+  string                   username             = 3;
+  string                   password             = 4;
+  uint32                   db                   = 5;
+  uint32                   max_retries          = 6;
+  google.protobuf.Duration min_retry_backoff    = 7;
+  google.protobuf.Duration max_retry_backoff    = 8;
+  google.protobuf.Duration dial_timeout         = 9;
+  google.protobuf.Duration read_timeout         = 10;
+  google.protobuf.Duration write_timeout        = 11;
+  bool                     pool_fifo            = 12;
+  uint32                   pool_size            = 13;
+  uint32                   min_idle_conns       = 14;
+  google.protobuf.Duration max_conn_age         = 15;
+  google.protobuf.Duration pool_timeout         = 16;
+  google.protobuf.Duration idle_timeout         = 17;
+  google.protobuf.Duration idle_check_frequency = 18;
+}
+
+message Mysql {
+  string                   user                   = 1;
+  string                   password               = 2;
+  string                   net                    = 3;
+  string                   addr                   = 4;
+  string                   dbname                 = 5;
+  map<string, string>      params                 = 6;
+  string                   collation              = 7;
+  string                   loc                    = 8;
+  uint32                   max_allowed_packet     = 9;
+  string                   server_pub_key         = 10;
+  string                   tls_config             = 11;
+  google.protobuf.Duration timeout                = 12;
+  google.protobuf.Duration read_timeout           = 13;
+  google.protobuf.Duration write_timeout          = 14;
+  bool                     allow_old_passwords    = 15;
+  bool                     check_conn_liveness    = 16;
+  bool                     client_found_rows      = 17;
+  bool                     columns_with_alias     = 18;
+  bool                     interpolate_params     = 19;
+  bool                     multi_statements       = 20;
+  bool                     parse_time             = 21;
+  bool                     reject_read_only       = 22;
+  bool                     allow_native_passwords = 23;
+  uint64                   max_idle_conns         = 30;
+  uint64                   max_open_conns         = 31;
+  google.protobuf.Duration conn_max_lifetime      = 32;
+  bool                     debug                  = 33;
+  string                   dsn                    = 34;
+  Log                      log                    = 35;
+  message Log {
+       bool                show_slow_sql                 = 1;
+       bool                ignore_record_not_found_error = 2;
+      }
+  }

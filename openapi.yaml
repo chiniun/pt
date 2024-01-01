@@ -1,0 +1,161 @@
+# Generated with protoc-gen-openapi
+# https://github.com/google/gnostic/tree/master/cmd/protoc-gen-openapi
+
+openapi: 3.0.3
+info:
+    title: ""
+    version: 0.0.1
+paths:
+    /pt/announce:
+        get:
+            tags:
+                - Tracker
+            description: Sends a greeting
+            operationId: Tracker_Announce
+            parameters:
+                - name: infoHash
+                  in: query
+                  description: bitTracker
+                  schema:
+                    type: string
+                - name: peerId
+                  in: query
+                  schema:
+                    type: string
+                - name: ip
+                  in: query
+                  schema:
+                    type: string
+                - name: port
+                  in: query
+                  schema:
+                    type: integer
+                    format: uint32
+                - name: uploaded
+                  in: query
+                  schema:
+                    type: string
+                - name: downloaded
+                  in: query
+                  schema:
+                    type: string
+                - name: left
+                  in: query
+                  schema:
+                    type: string
+                - name: numwant
+                  in: query
+                  schema:
+                    type: string
+                - name: key
+                  in: query
+                  schema:
+                    type: string
+                - name: compact
+                  in: query
+                  schema:
+                    type: boolean
+                - name: supportcrypto
+                  in: query
+                  schema:
+                    type: boolean
+                - name: event
+                  in: query
+                  schema:
+                    type: string
+                - name: passkey
+                  in: query
+                  description: private tracker (guess)
+                  schema:
+                    type: string
+                - name: authkey
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/pt.v1.AnnounceReply'
+    /pt/scrape:
+        get:
+            tags:
+                - Tracker
+            operationId: Tracker_Scrape
+            parameters:
+                - name: infoHash
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/pt.v1.ScrapeReply'
+    /pt/{name}:
+        get:
+            tags:
+                - Greeter
+            description: Sends a greeting
+            operationId: Greeter_SayHello
+            parameters:
+                - name: name
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/pt.v1.HelloReply'
+components:
+    schemas:
+        pt.v1.AnnounceReply:
+            type: object
+            properties:
+                interval:
+                    type: string
+                complete:
+                    type: string
+                incomplete:
+                    type: string
+                peers:
+                    type: string
+                    format: bytes
+                peerIpv6:
+                    type: string
+                    format: bytes
+            description: TODO  bencode
+        pt.v1.HelloReply:
+            type: object
+            properties:
+                message:
+                    type: string
+            description: The response message containing the greetings
+        pt.v1.ScrapeReply:
+            type: object
+            properties:
+                files:
+                    type: object
+                    additionalProperties:
+                        $ref: '#/components/schemas/pt.v1.Stat'
+        pt.v1.Stat:
+            type: object
+            properties:
+                complete:
+                    type: string
+                incomplete:
+                    type: string
+            description: TODO  `bencode`
+tags:
+    - name: Greeter
+      description: The greeting service definition.
+    - name: Tracker
+      description: The greeting service definition.

@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package pt.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "pt/api/pt/v1;v1";
+
+// The greeting service definition.
+service Tracker {
+  // Sends a greeting
+  rpc Announce (AnnounceRequest) returns (AnnounceReply) {
+    option (google.api.http) = {
+      get: "/pt/announce"
+    };
+  }
+
+  rpc Scrape (ScrapeRequest) returns (ScrapeReply) {
+    option (google.api.http) = {
+      get: "/pt/scrape"
+    };
+  }
+}
+
+
+
+message AnnounceRequest {
+  // bitTracker
+  string info_hash =1;
+  string peer_id = 2;
+  string ip = 3;
+  uint32 port = 4;
+  uint64 uploaded =5;
+  uint64 downloaded = 6;
+  uint64 left = 7;
+  uint64 numwant = 8;
+  string key =9;
+  bool compact = 10;
+  bool supportcrypto = 11;
+  string event = 12;
+
+  //private tracker (guess)
+  string passkey =98; //len 32 || 0 bytes
+  string authkey = 99;
+}
+
+//TODO  bencode
+message AnnounceReply {
+  int64 interval = 1;
+  int64 complete = 2;
+  int64 incomplete = 3;
+  bytes peers = 4;
+  bytes peer_ipv6 = 5;
+}
+
+
+message ScrapeRequest {
+  string info_hash = 1;
+}
+
+// TODO  `bencode`
+message Stat {
+  int64 complete = 1;
+  int64 incomplete = 2;
+}
+
+message ScrapeReply {
+  map<string,Stat> files = 1;
+}
+
