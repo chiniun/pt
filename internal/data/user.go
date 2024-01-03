@@ -34,9 +34,9 @@ func (o *User) UpdateDemo(ctx context.Context, user *biz.User) error {
 		}).Error
 }
 
-func (o *User) GetByPasshash(ctx context.Context, passhash string) (*biz.User, error) {
+func (o *User) GetByPasskey(ctx context.Context, passkey string) (*biz.User, error) {
 	var user biz.User
-	err := o.data.DB.WithContext(ctx).Model(&biz.User{}).Where("passhash =?", passhash).First(&user).Error
+	err := o.data.DB.WithContext(ctx).Model(&biz.User{}).Where("passkey =?", passkey).First(&user).Error
 	if err != nil {
 		return nil, errors.New(500, "dbErr", err.Error())
 	}

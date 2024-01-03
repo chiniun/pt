@@ -128,5 +128,5 @@ type User struct {
 }
 
 func (o *User) TableName() string {
-	return "user"
+	return "users"
 }
