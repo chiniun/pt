@@ -18,6 +18,7 @@ var ProviderSet = wire.NewSet(NewData,
 	wire.Bind(new(biz.TrackerAnnounceRepo), new(*User)),
 
 	NewUser,
+	NewCache,
 	// wire.Struct(new(User)),
 
 )
