@@ -36,7 +36,7 @@ func (o *User) UpdateDemo(ctx context.Context, user *biz.User) error {
 
 func (o *User) GetByPasskey(ctx context.Context, passkey string) (*biz.User, error) {
 	var user biz.User
-	err := o.data.DB.WithContext(ctx).Model(&biz.User{}).Where("passkey =?", passkey).First(&user).Error
+	err := o.data.DB.WithContext(ctx).Model(&biz.User{}).Where("passkey = ?", passkey).First(&user).Error
 	if err != nil {
 		return nil, errors.New(500, "dbErr", err.Error())
 	}
@@ -46,7 +46,7 @@ func (o *User) GetByPasskey(ctx context.Context, passkey string) (*biz.User, err
 
 func (o *User) GetByAuthkey(ctx context.Context, key string) (*biz.User, error) {
 	var user biz.User
-	err := o.data.DB.WithContext(ctx).Model(&biz.User{}).Where("authkey =?", key).First(&user).Error
+	err := o.data.DB.WithContext(ctx).Model(&biz.User{}).Where("authkey = ?", key).First(&user).Error
 	if err != nil {
 		return nil, errors.New(500, "dbErr", err.Error())
 	}

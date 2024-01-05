@@ -2,12 +2,14 @@ package biz
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/xgfone/go-bt/tracker"
-	"github.com/xgfone/go-bt"
+	"gorm.io/gorm"
 )
 
 type AnnounceRequest struct {
@@ -49,7 +51,6 @@ type AnnounceResponse struct {
 type TrackerAnnounceRepo interface {
 	GetByPasskey(ctx context.Context, passkey string) (*User, error)
 	GetByAuthkey(ctx context.Context, authkey string) (*User, error)
-
 }
 
 // TrackerUsecase is a Tracker usecase.
@@ -108,7 +109,7 @@ func (o *TrackerAnnounceUsecase) AnounceCheck(ctx context.Context, in *AnnounceR
 			"info_hash": infoHash,
 		}
 		lockString := buildQueryString(lockParams)
-		exist, err := o.cache.CacheLock(ctx, CacheKey_IsReAnnounceKey, lockString, 20)
+		exist, err := o.cache.Lock(ctx, CacheKey_IsReAnnounceKey, lockString, 20)
 		if err != nil {
 			return err
 		}
@@ -117,7 +118,7 @@ func (o *TrackerAnnounceUsecase) AnounceCheck(ctx context.Context, in *AnnounceR
 		}
 
 		if !isReAnnounce {
-			exist, err = o.cache.CacheLock(ctx, CacheKey_ReAnnounceCheckByAuthKey, subAuthkey, 60)
+			exist, err = o.cache.Lock(ctx, CacheKey_ReAnnounceCheckByAuthKey, subAuthkey, 60)
 			if err != nil {
 				return err
 			}
@@ -150,7 +151,7 @@ func (o *TrackerAnnounceUsecase) AnounceCheck(ctx context.Context, in *AnnounceR
 			"passkey":   passkey,
 		}
 		lockString := buildQueryString(lockParams)
-		exist, err := o.cache.CacheLock(ctx, CacheKey_IsReAnnounceKey, lockString, 20)
+		exist, err := o.cache.Lock(ctx, CacheKey_IsReAnnounceKey, lockString, 20)
 		if err != nil {
 			return err
 		}
@@ -174,7 +175,7 @@ func (o *TrackerAnnounceUsecase) AnounceCheck(ctx context.Context, in *AnnounceR
 	if !isReAnnounce {
 		torrentReAnnounceKey := fmt.Sprintf("reAnnounceCheckByInfoHash:%s", userAuthenticateKey)
 
-		exist, err := o.cache.CacheLock(ctx, torrentReAnnounceKey, infoHash, 60)
+		exist, err := o.cache.Lock(ctx, torrentReAnnounceKey, infoHash, 60)
 		if err != nil {
 			return err
 		}
@@ -187,45 +188,76 @@ func (o *TrackerAnnounceUsecase) AnounceCheck(ctx context.Context, in *AnnounceR
 	//dbconn_announce
 
 	//check authkey
-	user,err := o.repo.GetByAuthkey(ctx,authkey)
+	user, err := o.repo.GetByAuthkey(ctx, authkey)
 	if err != nil {
-		_,errLock := o.cache.CacheLock(ctx,CacheKey_AuthKeyInvalidKey,authkey, 24 * 3600 )
+		_, errLock := o.cache.Lock(ctx, CacheKey_AuthKeyInvalidKey, authkey, 24*3600)
 		if errLock != nil {
 			return errLock
 		}
-		return err 
+		return err
 	}
-	passkey = user.Passkey  //todo 这里会有全局passkey赋值
+	passkey = user.Passkey //todo 这里会有全局passkey赋值
 
 	// GetIP, check port
-	go-bt
+
+	if portBlacklisted(in.Port) { //TODO
+		//warn port is blacklisted
+	}
+
+	// return peer list limit
+	rsize := 50
+
+	// seeder
+	var seeder = "no"
+	if in.Left == 0 {
+		seeder = "yes"
+	}
+	
+	uInfoCacheKey := fmt.Sprintf("user_passkey_%s_content", passkey)
+	azStr, err := o.cache.GetByKey(ctx, uInfoCacheKey)
+	if err != nil {
+		return err
+	}
+	if len(azStr) == 0 {
+		user, err := o.repo.GetByPasskey(ctx, passkey)
+		if err != nil {
+			if errors.Is(err,gorm.ErrRecordNotFound) {
+				_, errLock := o.cache.Lock(ctx, CacheKey_PasskeyInvalidKey, passkey,24 * 3600)
+				if errLock != nil{
+					return nil
+				}
+				//TODO return error
+			}
+			return err
+		}
+		ud, err := json.Marshal(user)
+		if err != nil {
+			return err
+		}
+		_,err = o.cache.Set(ctx, uInfoCacheKey, string(ud), 3600)
+		if err != nil {
+			return err
+		}
+	}
+
+
+	// checkclient
+	// checkUserAgent
+
 	
 
-	// Disable compact announce with IPv6
-
-	// 	$peerIPV46 = "";
-	// if ($ipv4) {
-	//     $peerIPV46 .= ", ipv4 = " . sqlesc($ipv4);
-	// }
-	// if ($ipv6) {
-	//     $peerIPV46 .= ", ipv6 = " . sqlesc($ipv6);
-	// }
-
-	// check port and connectable
-	// if (portblacklisted($port))
-	// warn("Port $ blacklisted.");
 
 	return nil
 }
 
 func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *AnnounceRequest) (*AnnounceResponse, error) {
 
-	var seeder bool
-	in.AnnounceRequest.
-		user, err := o.repo.GetByPasskey(ctx, in.Passkey)
-	if err != nil {
-		return nil, err
-	}
+	// var seeder bool
+	// in.AnnounceRequest.
+	// 	user, err := o.repo.GetByPasskey(ctx, in.Passkey)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	return nil, nil
 }
@@ -239,4 +271,32 @@ func buildQueryString(params map[string]string) string {
 		query += key + "=" + value
 	}
 	return query
+}
+
+func portBlacklisted(port uint16) bool {
+	// direct connect
+	if port >= 411 && port <= 413 {
+		return true
+	}
+	// bittorrent
+	if port >= 6881 && port <= 6889 {
+		return true
+	}
+	// kazaa
+	if port == 1214 {
+		return true
+	}
+	// gnutella
+	if port >= 6346 && port <= 6347 {
+		return true
+	}
+	// emule
+	if port == 4662 {
+		return true
+	}
+	// winmx
+	if port == 6699 {
+		return true
+	}
+	return false
 }
