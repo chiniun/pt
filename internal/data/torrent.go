@@ -2,10 +2,11 @@ package data
 
 import (
 	"context"
-	"pt/internal/biz"
+	"pt/internal/biz/model"
 
-	"github.com/go-kratos/kratos/v2/errors"
+	//"github.com/go-kratos/kratos/v2/errors"
 	"github.com/go-kratos/kratos/v2/log"
+	"github.com/pkg/errors"
 )
 
 type Torrent struct {
@@ -20,7 +21,11 @@ func NewTorrent(data *Data, logger log.Logger) *Torrent {
 	}
 }
 
-func (o *Torrent) Create(ctx context.Context, Torrent *biz.Torrent) error {
-	return o.data.DB.WithContext(ctx).Create(Torrent).Error
+func (o *Torrent) Create(ctx context.Context, Torrent *model.Torrent) error {
+	err := o.data.DB.WithContext(ctx).Create(Torrent).Error
+	if err != nil {
+		return errors.Wrap(err,"Create")
+	}
 
+	return nil
 }

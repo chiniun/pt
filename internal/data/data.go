@@ -1,7 +1,7 @@
 package data
 
 import (
-	"pt/internal/biz"
+	"pt/internal/biz/inter"
 	"pt/internal/conf"
 	comgorm "pt/internal/utils/gorm"
 	comredis "pt/internal/utils/redis"
@@ -14,13 +14,11 @@ import (
 
 // ProviderSet is data providers.
 var ProviderSet = wire.NewSet(NewData,
-	wire.Bind(new(biz.TrackerScrapeRepo), new(*User)),
-	wire.Bind(new(biz.TrackerAnnounceRepo), new(*User)),
-
 	NewUser,
 	NewCache,
-	// wire.Struct(new(User)),
-
+	wire.Bind(new(inter.TrackerScrapeRepo), new(*User)),
+	wire.Bind(new(inter.TrackerAnnounceRepo), new(*User)),
+	wire.Bind(new(inter.CacheRepo), new(*Cache)),
 )
 
 // Data .
@@ -33,10 +31,8 @@ type Data struct {
 func NewData(c *conf.Data, logger log.Logger) (*Data, func(), error) {
 	logger.Log(log.LevelInfo, "c", c)
 
-
 	db := comgorm.NewMySQLWithPanic(c.GetMysql(), logger)
 	redisCli := comredis.NewWithPanic(c.GetRedis(), logger)
-
 
 	cleanup := func() {
 		log.NewHelper(logger).Info("closing the data resources")

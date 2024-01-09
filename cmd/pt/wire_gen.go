@@ -30,7 +30,8 @@ func wireApp(confServer *conf.Server, confData *conf.Data, logger log.Logger) (*
 		return nil, nil, err
 	}
 	user := data.NewUser(dataData, logger)
-	trackerAnnounceUsecase := biz.NewTrackerAnnounceUsecase(user, logger)
+	cache := data.NewCache(dataData, logger)
+	trackerAnnounceUsecase := biz.NewTrackerAnnounceUsecase(user, cache, logger)
 	trackerScrapeUsecase := biz.NewTrackerScrapeUsecase(user, logger)
 	trackerService := service.NewTrackerService(trackerAnnounceUsecase, trackerScrapeUsecase, logger)
 	grpcServer := server.NewGRPCServer(confServer, greeterService, trackerService, logger)

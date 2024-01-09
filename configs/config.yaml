@@ -7,10 +7,10 @@ server:
     timeout: 1s
 data:
   mysql:
-    dsn: woox_xnew:idaejiethoowaiwoiV8P@tcp(pc-8vb50i1q87w34j629.rwlb.zhangbei.rds.aliyuncs.com:3306)/woo_new?loc=Local&parseTime=true&charset=utf8mb4
+    dsn: root:qqqq@tcp(localhost:3306)/nexusphp?loc=Local&parseTime=true&charset=utf8mb4
     debug: true
   redis:
-    addr: r-8nvb92lwncsgbu4bd8o.redis.zhangbei.rds.aliyuncs.com:6379
-    username: default
-    password: 7LVx4gQlng73o
+    addr: localhost:6379
+    username: 
+    password: 
 

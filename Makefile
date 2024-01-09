@@ -67,6 +67,8 @@ all:
 local:
 	go run ./cmd/*/ -conf configs/config.yaml
 
+
+
 # show help
 help:
 	@echo ''

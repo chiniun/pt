@@ -10,6 +10,8 @@ import (
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/xgfone/go-bt/tracker"
 	"gorm.io/gorm"
+
+	"pt/internal/biz/inter"
 )
 
 type AnnounceRequest struct {
@@ -48,22 +50,17 @@ type AnnounceResponse struct {
 }
 
 // TrackerAnnounceRepo
-type TrackerAnnounceRepo interface {
-	GetByPasskey(ctx context.Context, passkey string) (*User, error)
-	GetByAuthkey(ctx context.Context, authkey string) (*User, error)
-}
-
 // TrackerUsecase is a Tracker usecase.
 type TrackerAnnounceUsecase struct {
-	repo  TrackerAnnounceRepo
-	cache CacheRepo
+	repo  inter.TrackerAnnounceRepo
+	cache inter.CacheRepo
 	log   *log.Helper
 }
 
 // NewTrackerAnnounceUsecase new a Tracker usecase.
 func NewTrackerAnnounceUsecase(
-	repo TrackerAnnounceRepo,
-	cache CacheRepo,
+	repo inter.TrackerAnnounceRepo,
+	cache inter.CacheRepo,
 	logger log.Logger) *TrackerAnnounceUsecase {
 	return &TrackerAnnounceUsecase{
 		repo:  repo,
@@ -205,14 +202,15 @@ func (o *TrackerAnnounceUsecase) AnounceCheck(ctx context.Context, in *AnnounceR
 	}
 
 	// return peer list limit
-	rsize := 50
+	//rsize := 50
 
 	// seeder
 	var seeder = "no"
 	if in.Left == 0 {
 		seeder = "yes"
 	}
-	
+
+	fmt.Println(seeder)
 	uInfoCacheKey := fmt.Sprintf("user_passkey_%s_content", passkey)
 	azStr, err := o.cache.GetByKey(ctx, uInfoCacheKey)
 	if err != nil {
@@ -221,9 +219,9 @@ func (o *TrackerAnnounceUsecase) AnounceCheck(ctx context.Context, in *AnnounceR
 	if len(azStr) == 0 {
 		user, err := o.repo.GetByPasskey(ctx, passkey)
 		if err != nil {
-			if errors.Is(err,gorm.ErrRecordNotFound) {
-				_, errLock := o.cache.Lock(ctx, CacheKey_PasskeyInvalidKey, passkey,24 * 3600)
-				if errLock != nil{
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				_, errLock := o.cache.Lock(ctx, CacheKey_PasskeyInvalidKey, passkey, 24*3600)
+				if errLock != nil {
 					return nil
 				}
 				//TODO return error
@@ -234,18 +232,14 @@ func (o *TrackerAnnounceUsecase) AnounceCheck(ctx context.Context, in *AnnounceR
 		if err != nil {
 			return err
 		}
-		_,err = o.cache.Set(ctx, uInfoCacheKey, string(ud), 3600)
+		_, err = o.cache.Set(ctx, uInfoCacheKey, string(ud), 3600)
 		if err != nil {
 			return err
 		}
 	}
 
-
 	// checkclient
 	// checkUserAgent
-
-	
-
 
 	return nil
 }

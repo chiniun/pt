@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/go-kratos/kratos/v2/log"
+	"pt/internal/biz/inter"
 )
 
 type ScrapeRequest struct {
@@ -22,17 +23,14 @@ type Stat struct {
 
 
 // TrackerScrapeRepo is a Greater repo.
-type TrackerScrapeRepo interface {
-}
-
 // TrackerUsecase is a Tracker usecase.
 type TrackerScrapeUsecase struct {
-	repo TrackerScrapeRepo
+	repo inter.TrackerScrapeRepo
 	log  *log.Helper
 }
 
 // NewTrackerScrapeUsecase new a Tracker usecase.
-func NewTrackerScrapeUsecase(repo TrackerScrapeRepo, logger log.Logger) *TrackerScrapeUsecase {
+func NewTrackerScrapeUsecase(repo inter.TrackerScrapeRepo, logger log.Logger) *TrackerScrapeUsecase {
 	return &TrackerScrapeUsecase{repo: repo, log: log.NewHelper(logger)}
 }
 
