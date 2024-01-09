@@ -254,7 +254,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 	// checkUserAgent
 
 	// checkTorrent
-	toData, err := o.cache.GetByKey(ctx, 
+	toData, err := o.cache.GetByKey(ctx,
 		contentKeyCombine(CacheKey_TorrentHashkeyContent, infoHash))
 	if err != nil {
 		if !errors.As(err, redis.Nil) {
@@ -264,7 +264,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 		torrent, err := o.trepo.FindByHash(infoHash)
 		if err != nil { //torrent不存在
 			firstNeedle := "info_hash="
-			queryString := r.URL.RawQuery
+			queryString := in.RawQuery
 			start := strings.Index(queryString, firstNeedle) + len(firstNeedle)
 			end := strings.Index(queryString[start:], "&")
 			if end == -1 {
@@ -274,7 +274,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 			}
 			infoHashUrlEncode := queryString[start:end]
 			o.log.Errorf("[TORRENT NOT EXISTS] params: %s, infoHashUrlEncode: %s\n", queryString, infoHashUrlEncode)
-			o.cache.Set(ctx, 
+			o.cache.Set(ctx,
 				fmt.Sprintf("%s:%s", CacheKey_TorrentNotExistsKey, infoHashUrlEncode), time.Now().Format(time.RFC3339), 24*3600)
 
 			return errors.Wrap(err, "torrent not registered with this tracker")
