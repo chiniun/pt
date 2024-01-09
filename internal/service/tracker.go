@@ -31,7 +31,8 @@ func NewTrackerService(
 
 // Sends a greeting
 func (o *TrackerService) Announce(ctx context.Context, in *v1.AnnounceRequest) (*v1.AnnounceReply, error) {
-	panic("not implemented") // TODO: Implement
+	ctx.Value()
+	o.auc.AnounceHandler(ctx, in)
 }
 
 func (o *TrackerService) Scrape(ctx context.Context, in *v1.ScrapeRequest) (*v1.ScrapeReply, error) {

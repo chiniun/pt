@@ -20,7 +20,7 @@ var (
 )
 
 var (
-	user   inter.TrackerAnnounceRepo
+	user   inter.UserRepo
 	cache  inter.CacheRepo
 	ctx    context.Context
 	source *Data

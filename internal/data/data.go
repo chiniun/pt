@@ -13,12 +13,15 @@ import (
 )
 
 // ProviderSet is data providers.
-var ProviderSet = wire.NewSet(NewData,
+var ProviderSet = wire.NewSet(
+	NewData,
 	NewUser,
 	NewCache,
+	NewTorrent,
 	wire.Bind(new(inter.TrackerScrapeRepo), new(*User)),
-	wire.Bind(new(inter.TrackerAnnounceRepo), new(*User)),
+	wire.Bind(new(inter.UserRepo), new(*User)),
 	wire.Bind(new(inter.CacheRepo), new(*Cache)),
+	wire.Bind(new(inter.TorrentRepo), new(*Torrent)),
 )
 
 // Data .
