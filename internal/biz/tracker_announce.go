@@ -2,8 +2,10 @@ package biz
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -49,11 +51,12 @@ func (req *AnnounceRequest) IsSeeding() bool {
 }
 
 type AnnounceResponse struct {
-	Interval   int    `bencode:"interval"`
-	Complete   int    `bencode:"complete"`
-	Incomplete int    `bencode:"incomplete"`
-	Peers      []byte `bencode:"peers"`
-	PeersIPv6  []byte `bencode:"peers_ipv6"`
+	Interval    int    `bencode:"interval"`
+	MinInterval int    `bencode:"min interval"`
+	Complete    int    `bencode:"complete"`
+	Incomplete  int    `bencode:"incomplete"`
+	Peers       []byte `bencode:"peers"`
+	PeersIPv6   []byte `bencode:"peers_ipv6"`
 }
 
 // TrackerAnnounceRepo
@@ -92,7 +95,7 @@ const (
 )
 
 // AnounceCheck, data check before response
-func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *AnnounceRequest) error {
+func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *AnnounceRequest) (resp AnnounceResponse, err error) {
 
 	//TODO: 1 authKey || passKey check
 
@@ -127,7 +130,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 		lockString := buildQueryString(lockParams)
 		exist, err := o.cache.Lock(ctx, CacheKey_IsReAnnounceKey, lockString, 20)
 		if err != nil {
-			return err
+			return resp, err
 		}
 		if !exist { //false 键已存在
 			isReAnnounce = true
@@ -136,7 +139,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 		if !isReAnnounce {
 			exist, err = o.cache.Lock(ctx, CacheKey_ReAnnounceCheckByAuthKey, subAuthkey, 60)
 			if err != nil {
-				return err
+				return resp, err
 			}
 			if !exist { //false 键已存在 //TODO:
 				//msg := "Request too frequent(a)"
@@ -146,7 +149,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 
 		res, err := o.cache.Get(ctx, CacheKey_AuthKeyInvalidKey, authkey)
 		if err != nil {
-			return err // 不存在会报错吗
+			return resp, err // 不存在会报错吗
 		}
 		if len(res) != 0 { //TODO
 			//msg := "Invalid authkey"
@@ -156,7 +159,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 
 		res, err := o.cache.Get(ctx, CacheKey_PasskeyInvalidKey, passkey)
 		if err != nil {
-			return err // 不存在会报错吗
+			return resp, err // 不存在会报错吗
 		}
 		if len(res) != 0 { //TODO
 			//msg := "Passkey Invalid"
@@ -169,7 +172,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 		lockString := buildQueryString(lockParams)
 		exist, err := o.cache.Lock(ctx, CacheKey_IsReAnnounceKey, lockString, 20)
 		if err != nil {
-			return err
+			return resp, err
 		}
 		if !exist { //false 键已存在
 			isReAnnounce = true
@@ -182,7 +185,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 
 	exist, err := o.cache.Get(ctx, CacheKey_TorrentNotExistsKey, infoHash)
 	if err != nil { //TODO ?
-		return err
+		return resp, err
 	}
 	if len(exist) == 0 { //false 键已存在
 		//msg := "Torrent not exists"
@@ -193,7 +196,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 
 		exist, err := o.cache.Lock(ctx, torrentReAnnounceKey, infoHash, 60)
 		if err != nil {
-			return err
+			return resp, err
 		}
 		if !exist { //false 键已存在 //TODO:
 			//$msg = "Request too frequent(h)";
@@ -208,13 +211,14 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 	if err != nil {
 		_, errLock := o.cache.Lock(ctx, CacheKey_AuthKeyInvalidKey, authkey, 24*3600)
 		if errLock != nil {
-			return errLock
+			return resp, errLock
 		}
-		return err
+		return resp, err
 	}
 	passkey = user.Passkey //todo 这里会有全局passkey赋值
 
 	// GetIP, check port
+	var compact int
 
 	if portBlacklisted(in.Port) { //TODO
 		//warn port is blacklisted
@@ -234,7 +238,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 	uInfoCacheKey := contentKeyCombine(CacheKey_UserPasskeyContent, passkey)
 	azStr, err := o.cache.GetByKey(ctx, uInfoCacheKey)
 	if err != nil {
-		return err
+		return resp, err
 	}
 	if len(azStr) == 0 {
 		user, err := o.urepo.GetByPasskey(ctx, passkey)
@@ -242,19 +246,19 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				_, errLock := o.cache.Lock(ctx, CacheKey_PasskeyInvalidKey, passkey, 24*3600)
 				if errLock != nil {
-					return nil
+					return resp, nil
 				}
 				//TODO return error
 			}
-			return err
+			return resp, err
 		}
 		ud, err := json.Marshal(user)
 		if err != nil {
-			return err
+			return resp, err
 		}
 		_, err = o.cache.Set(ctx, uInfoCacheKey, string(ud), 3600)
 		if err != nil {
-			return err
+			return resp, err
 		}
 	}
 
@@ -266,7 +270,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 		contentKeyCombine(CacheKey_TorrentHashkeyContent, infoHash))
 	if err != nil {
 		if !errors.As(err, redis.Nil) {
-			return err
+			return resp, err
 		}
 		// nil  查询数据库
 		torrent, err := o.trepo.FindByHash(infoHash)
@@ -285,7 +289,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 			o.cache.Set(ctx,
 				fmt.Sprintf("%s:%s", CacheKey_TorrentNotExistsKey, infoHashUrlEncode), time.Now().Format(time.RFC3339), 24*3600)
 
-			return errors.Wrap(err, "torrent not registered with this tracker")
+			return resp, errors.Wrap(err, "torrent not registered with this tracker")
 		}
 
 		tobyte, _ := json.Marshal(torrent)
@@ -295,23 +299,23 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 	torrent := new(model.TorrentView)
 	err = json.Unmarshal([]byte(toData), torrent)
 	if err != nil {
-		return errors.Wrap(err, "Unmarshal")
+		return resp, errors.Wrap(err, "Unmarshal")
 	}
 
 	if authKeyTid != "" && authKeyTid != strconv.FormatInt(int64(torrent.ID), 10) {
 		_, err = o.cache.Lock(ctx, CacheKey_AuthKeyInvalidKey, authkey, 24*3600, false)
 		if err != nil {
-			return err
+			return resp, err
 		}
 		//do_log("[ANNOUNCE] $msg");
 		//warn($msg);
 	}
 
 	if torrent.Banned == "yes" {
-		return errors.WithStack(errors.New("torrents banned"))
+		return resp, errors.WithStack(errors.New("torrents banned"))
 	}
 	if torrent.ApprovalStatus != constant.APPROVAL_STATUS_ALLOW {
-		return errors.WithStack(errors.New("torrent review not approved"))
+		return resp, errors.WithStack(errors.New("torrent review not approved"))
 	}
 
 	// select peers info from peers table for this torrent
@@ -346,12 +350,71 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 	}
 
 	//rep_dict
-	
+	resp.Interval = int(realAnnounceInterval)
+	resp.MinInterval = int(announceWait)
+	resp.Complete = int(torrent.Seeders)
+	resp.Incomplete = int(torrent.Leechers)
+	resp.Peers = nil // // By default it is a array object, only when `&compact=1` then it should be a string
+	resp.PeersIPv6 = nil
+	// todo compact
+	if compact == 1 {
+		resp.Peers = []byte("")     // Change `peers` from array to string
+		resp.PeersIPv6 = []byte("") // If peer use IPv6 address , we should add packed string in `peers6`
+	}
 
-	
+	if isReAnnounce {
+		o.log.Error("YES_RE_ANNOUNCE")
+		return
+	}
 
+	// GetPeerList
+	peers, err := o.trepo.GetPeerList(ctx, torrent.ID, onlyLeechQuery, limit)
+	if err != nil {
+		return
+	}
+	if in.Event == "stop" {
 
-	return nil
+	} else {
+		for _, peer := range peers {
+			peer.PeerID = hashPad(peer.PeerID)
+			if peer.PeerID == in.PeerID && peer.UserID == uint32(user.Id) {
+				//todo Self row //todo....
+				continue
+			}
+
+			if compact == 1 {
+				if peer.IPv4 != "" {
+					resp.Peers = append(resp.Peers, concatIPAndPort(peer.IPv4, peer.Port)...)
+				}
+				if peer.IPv6 != "" {
+					resp.PeersIPv6 = append(resp.PeersIPv6, concatIPAndPort(peer.IPv6, peer.Port)...)
+				}
+			} else {
+				if peer.IPv4 != "" {
+					tmpPeer := model.PeerBin{
+						PeerID: peer.PeerID,
+						IP:     peer.IPv4,
+						Port:   int32(peer.Port),
+					}
+					resp.Peers = append(resp.Peers, tmpPeer)
+				}
+
+				if peer.IPv6 != "" {
+					tmpPeer := model.PeerBin{
+						PeerID: peer.PeerID,
+						IP:     peer.IPv6,
+						Port:   int32(peer.Port),
+					}
+					resp.Peers = append(resp.Peers, tmpPeer) //todo 这里也用Peers吗
+				}
+
+			}
+
+		}
+
+	}
+
+	return
 }
 
 func buildQueryString(params map[string]string) string {
@@ -395,4 +458,27 @@ func portBlacklisted(port uint16) bool {
 
 func contentKeyCombine(key, body string) string {
 	return fmt.Sprintf(key, body)
+}
+
+func hashPad(hash string) string {
+	return fmt.Sprintf("%-20s", string(hash))
+}
+
+func concatIPAndPort(ipv4 string, port uint16) []byte {
+	ip := net.ParseIP(ipv4)
+	if ip == nil {
+		// 处理无效的 IPv4 地址
+		return nil
+	}
+
+	ipv4Bytes := ip.To4()
+	if ipv4Bytes == nil {
+		// 处理非 IPv4 地址
+		return nil
+	}
+
+	portBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(portBytes, port)
+
+	return append(ipv4Bytes, portBytes...)
 }

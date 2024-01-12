@@ -5,7 +5,7 @@ import "time"
 type Peer struct {
 	ID             uint64    `json:"id"`
 	Torrent        uint32    `json:"torrent"`
-	PeerID         [20]byte  `json:"peer_id"`
+	PeerID         string    `json:"peer_id"`
 	IP             string    `json:"ip"`
 	Port           uint16    `json:"port"`
 	Uploaded       uint64    `json:"uploaded"`
@@ -34,7 +34,7 @@ func (*Peer) TableName() string {
 type PeerView struct {
 	ID                  uint64    `json:"id"`
 	Torrent             uint32    `json:"torrent"`
-	PeerID              [20]byte  `json:"peer_id"`
+	PeerID              string    `json:"peer_id"`
 	IP                  string    `json:"ip"`
 	Port                uint16    `json:"port"`
 	Uploaded            uint64    `json:"uploaded"`
@@ -57,4 +57,10 @@ type PeerView struct {
 	IPv4                string    `json:"ipv4"`
 	IPv6                string    `json:"ipv6"`
 	IsSeedBox           int8      `json:"is_seed_box"`
+}
+
+type PeerBin struct {
+	PeerID string `json:"peer_id,omitempty"`
+	IP     string `json:"ipv4,omitempty"`
+	Port   int32  `json:"port,omitempty"`
 }
