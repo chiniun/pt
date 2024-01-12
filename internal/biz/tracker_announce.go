@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/xgfone/go-bt/tracker"
 	"gorm.io/gorm"
 
+	"pt/internal/biz/constant"
 	"pt/internal/biz/inter"
 	"pt/internal/biz/model"
 )
@@ -93,8 +95,14 @@ const (
 func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *AnnounceRequest) error {
 
 	//TODO: 1 authKey || passKey check
-	isReAnnounce := false
-	userAuthenticateKey := ""
+
+	var (
+		authKeyTid          string
+		authKeyUid          string
+		userAuthenticateKey string
+		subAuthkey          string
+		isReAnnounce        bool
+	)
 
 	authkey := in.Authkey
 	passkey := in.Passkey
@@ -105,10 +113,10 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 		if len(parts) != 3 {
 			o.log.Warn("authkey format error")
 		}
-		authKeyTid := parts[0]
-		authKeyUid := parts[1]
+		authKeyTid = parts[0]
+		authKeyUid = parts[1]
 		userAuthenticateKey = parts[1]
-		subAuthkey := fmt.Sprintf("%s|%s", authKeyTid, authKeyUid)
+		subAuthkey = fmt.Sprintf("%s|%s", authKeyTid, authKeyUid)
 
 		// check ReAnnounce
 		var isReAnnounce bool
@@ -289,6 +297,59 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 	if err != nil {
 		return errors.Wrap(err, "Unmarshal")
 	}
+
+	if authKeyTid != "" && authKeyTid != strconv.FormatInt(int64(torrent.ID), 10) {
+		_, err = o.cache.Lock(ctx, CacheKey_AuthKeyInvalidKey, authkey, 24*3600, false)
+		if err != nil {
+			return err
+		}
+		//do_log("[ANNOUNCE] $msg");
+		//warn($msg);
+	}
+
+	if torrent.Banned == "yes" {
+		return errors.WithStack(errors.New("torrents banned"))
+	}
+	if torrent.ApprovalStatus != constant.APPROVAL_STATUS_ALLOW {
+		return errors.WithStack(errors.New("torrent review not approved"))
+	}
+
+	// select peers info from peers table for this torrent
+	var (
+		onlyLeechQuery string
+		limit          string
+	)
+
+	numPeers := torrent.Seeders + torrent.Leechers
+	var newNumPeers int64
+
+	if seeder == "yes" {
+		onlyLeechQuery = " AND seeder = 'no' "
+		newNumPeers = torrent.Leechers
+	} else {
+		newNumPeers = numPeers
+	}
+
+	if newNumPeers > int64(rsize) {
+		limit = fmt.Sprintf(" ORDER BY RAND() LIMIT %d", rsize)
+	}
+
+	var announceWait = constant.MIN_ANNOUNCE_WAIT_SECOND
+
+	realAnnounceInterval := constant.AnnounceInterval
+	if (announceWait < int(constant.AnnounceInterThree)) &&
+		((time.Now().Unix() - torrent.Timestamp) >= int64(constant.AnnounceInterThreeAge*86400)) {
+		realAnnounceInterval = constant.AnnounceInterThree
+	} else if (announceWait < int(constant.AnnounceInterTwo)) &&
+		((time.Now().Unix() - torrent.Timestamp) >= int64(constant.AnnounceInterThreeAge*86400)) {
+		realAnnounceInterval = constant.AnnounceInterTwo
+	}
+
+	//rep_dict
+	
+
+	
+
 
 	return nil
 }

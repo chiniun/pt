@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"pt/internal/biz/constant"
+	"time"
+)
 
 type Torrent struct {
 	ID                int32      `json:"id,omitempty" bson:"id" form:"id"`
@@ -59,17 +62,17 @@ func (*Torrent) TableName() string {
 }
 
 type TorrentView struct {
-	ID             int32     `gorm:"column:id"`
-	Size           uint64    `gorm:"column:size"`
-	Owner          int32     `gorm:"column:owner"`
-	SPState        uint8     `gorm:"column:sp_state"`
-	Seeders        int32     `gorm:"column:seeders"`
-	Leechers       int32     `gorm:"column:leechers"`
-	Timestamp      int64     `gorm:"column:ts"`
-	Added          time.Time `gorm:"column:added"`
-	Banned         string    `gorm:"column:banned"`
-	HR             int8      `gorm:"column:hr"`
-	ApprovalStatus int32     `gorm:"column:approval_status"`
-	Price          int32     `gorm:"column:price"`
-	CategoryMode   string    `gorm:"column:mode"`
+	ID             int64                    `gorm:"column:id"`
+	Size           int64                    `gorm:"column:size"`
+	Owner          int64                    `gorm:"column:owner"`
+	SPState        uint8                    `gorm:"column:sp_state"`
+	Seeders        int64                    `gorm:"column:seeders"`
+	Leechers       int64                    `gorm:"column:leechers"`
+	Timestamp      int64                    `gorm:"column:ts"`
+	Added          time.Time                `gorm:"column:added"`
+	Banned         string                   `gorm:"column:banned"`
+	HR             int8                     `gorm:"column:hr"`
+	ApprovalStatus constant.APPROVAL_STATUS `gorm:"column:approval_status"`
+	Price          float64                  `gorm:"column:price"`
+	CategoryMode   string                   `gorm:"column:mode"`
 }

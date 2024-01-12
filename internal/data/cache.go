@@ -24,9 +24,14 @@ func NewCache(data *Data, logger log.Logger) *Cache {
 	}
 }
 
-func (o *Cache) Lock(ctx context.Context, lockKey, lockString string, sec time.Duration) (bool, error) {
+func (o *Cache) Lock(ctx context.Context, lockKey, lockString string, sec time.Duration, isMd5 bool) (bool, error) {
+	var key string
+	if isMd5 {
+		key = fmt.Sprintf("%s:%x", lockKey, md5.Sum([]byte(lockString)))
+	} else {
+		key = fmt.Sprintf("%s:%x", lockKey, lockString)
 
-	key := lockKey + fmt.Sprintf(":%x", md5.Sum([]byte(lockString)))
+	}
 	setResult, err := o.data.redisCli.SetNX(ctx, key, time.Now(), sec*time.Second).Result()
 	if err != nil {
 		return true, errors.Wrap(err, "Lock")
