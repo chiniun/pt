@@ -206,7 +206,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 
 	//dbconn_announce
 
-	//check authkey
+	//check authkey //todo authKey not exist
 	user, err := o.urepo.GetByAuthkey(ctx, authkey)
 	if err != nil {
 		_, errLock := o.cache.Lock(ctx, CacheKey_AuthKeyInvalidKey, authkey, 24*3600)
@@ -217,7 +217,9 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 	}
 	passkey = user.Passkey //todo 这里会有全局passkey赋值
 
-	// GetIP, check port
+	//TODO  GetIP, check port
+
+
 	var compact int
 
 	if portBlacklisted(in.Port) { //TODO
@@ -241,7 +243,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 		return resp, err
 	}
 	if len(azStr) == 0 {
-		user, err := o.urepo.GetByPasskey(ctx, passkey)
+		user, err = o.urepo.GetByPasskey(ctx, passkey)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				_, errLock := o.cache.Lock(ctx, CacheKey_PasskeyInvalidKey, passkey, 24*3600)
@@ -372,13 +374,14 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 	if err != nil {
 		return
 	}
+	selfPeer := &model.PeerView{}
 	if in.Event == "stop" {
 
 	} else {
 		for _, peer := range peers {
 			peer.PeerID = hashPad(peer.PeerID)
 			if peer.PeerID == in.PeerID && peer.UserID == uint32(user.Id) {
-				//todo Self row //todo....
+				selfPeer = peer
 				continue
 			}
 
@@ -407,12 +410,32 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 					}
 					resp.Peers = append(resp.Peers, tmpPeer) //todo 这里也用Peers吗
 				}
-
 			}
 
 		}
 
 	}
+
+	if selfPeer.ID == 0 {
+		selfPeer,err = o.trepo.GetPeer(ctx,torrent.ID,user.Id,in.PeerID)
+		if err != nil {
+			return resp,err
+		}
+	}
+	
+	if selfPeer.ID != 0 && in.Event != "" && self.Prevts > (time.Now().Unix() - int64(announceWait)) {
+		//warn('There is a minimum announce time of ' . $announce_wait . ' seconds', $announce_wait);
+	}
+
+ 	var isSeedBoxRuleEnabled  bool
+
+	if isSeedBoxRuleEnabled {
+		if 
+	}
+
+
+	
+
 
 	return
 }

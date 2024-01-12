@@ -3,7 +3,7 @@ package model
 import "time"
 
 type User struct {
-	Id                  uint64    `json:"id"`
+	Id                  int64    `json:"id"`
 	Username            string    `json:"username"`
 	Passhash            string    `json:"passhash"`
 	Secret              string    `json:"secret"`
@@ -19,27 +19,27 @@ type User struct {
 	LastPM              time.Time `json:"last_pm"`
 	LastComment         time.Time `json:"last_comment"`
 	LastPost            time.Time `json:"last_post"`
-	LastBrowse          uint32    `json:"last_browse"`
-	LastMusic           uint32    `json:"last_music"`
-	LastCatchup         uint32    `json:"last_catchup"`
+	LastBrowse          int64    `json:"last_browse"`
+	LastMusic           int64    `json:"last_music"`
+	LastCatchup         int64    `json:"last_catchup"`
 	EditSecret          string    `json:"editsecret"`
 	Privacy             string    `json:"privacy"`
-	Stylesheet          uint8     `json:"stylesheet"`
-	Caticon             uint8     `json:"caticon"`
+	Stylesheet          int64     `json:"stylesheet"`
+	Caticon             int64     `json:"caticon"`
 	FontSize            string    `json:"fontsize"`
 	Info                string    `json:"info"`
 	AcceptPMS           string    `json:"acceptpms"`
 	CommentPM           string    `json:"commentpm"`
 	IP                  string    `json:"ip"`
-	Class               uint8     `json:"class"`
-	MaxClassOnce        int8      `json:"max_class_once"`
+	Class               int64     `json:"class"`
+	MaxClassOnce        int64      `json:"max_class_once"`
 	Avatar              string    `json:"avatar"`
-	Uploaded            uint64    `json:"uploaded"`
-	Downloaded          uint64    `json:"downloaded"`
-	Seedtime            uint64    `json:"seedtime"`
-	Leechtime           uint64    `json:"leechtime"`
+	Uploaded            int64    `json:"uploaded"`
+	Downloaded          int64    `json:"downloaded"`
+	Seedtime            int64    `json:"seedtime"`
+	Leechtime           int64    `json:"leechtime"`
 	Title               string    `json:"title"`
-	Country             uint16    `json:"country"`
+	Country             int64    `json:"country"`
 	Notifs              string    `json:"notifs"`
 	ModComment          string    `json:"modcomment"`
 	Enabled             string    `json:"enabled"`
@@ -52,9 +52,9 @@ type User struct {
 	WarnedUntil         time.Time `json:"warneduntil"`
 	NoAd                string    `json:"noad"`
 	NoAdUntil           time.Time `json:"noaduntil"`
-	TorrentsPerPage     uint8     `json:"torrentsperpage"`
-	TopicsPerPage       uint8     `json:"topicsperpage"`
-	PostsPerPage        uint8     `json:"postsperpage"`
+	TorrentsPerPage     int64     `json:"torrentsperpage"`
+	TopicsPerPage       int64     `json:"topicsperpage"`
+	PostsPerPage        int64     `json:"postsperpage"`
 	ClickTopic          string    `json:"clicktopic"`
 	DeletePMS           string    `json:"deletepms"`
 	SavePMS             string    `json:"savepms"`
@@ -76,11 +76,11 @@ type User struct {
 	Signature           string    `json:"signature"`
 	Lang                uint16    `json:"lang"`
 	Cheat               int16     `json:"cheat"`
-	Download            uint32    `json:"download"`
-	Upload              uint32    `json:"upload"`
-	ISP                 uint8     `json:"isp"`
-	Invites             uint16    `json:"invites"`
-	InvitedBy           uint32    `json:"invited_by"`
+	Download            int64    `json:"download"`
+	Upload              int64    `json:"upload"`
+	ISP                 int64     `json:"isp"`
+	Invites             int64    `json:"invites"`
+	InvitedBy           int64    `json:"invited_by"`
 	Gender              string    `json:"gender"`
 	VIPAdded            string    `json:"vip_added"`
 	VIPUntil            time.Time `json:"vip_until"`
@@ -91,16 +91,16 @@ type User struct {
 	LeechWarn           string    `json:"leechwarn"`
 	LeechWarnUntil      time.Time `json:"leechwarnuntil"`
 	LastWarned          time.Time `json:"lastwarned"`
-	TimesWarned         uint8     `json:"timeswarned"`
-	WarnedBy            uint32    `json:"warnedby"`
-	SBNum               uint16    `json:"sbnum"`
-	SBRefresh           uint16    `json:"sbrefresh"`
+	TimesWarned         int64     `json:"timeswarned"`
+	WarnedBy            int64    `json:"warnedby"`
+	SBNum               int64    `json:"sbnum"`
+	SBRefresh           int64    `json:"sbrefresh"`
 	HideHB              string    `json:"hidehb"`
 	ShowIMDB            string    `json:"showimdb"`
 	ShowDescription     string    `json:"showdescription"`
 	ShowComment         string    `json:"showcomment"`
 	ShowClientError     string    `json:"showclienterror"`
-	ShowDLNotice        uint8     `json:"showdlnotice"`
+	ShowDLNotice        int64     `json:"showdlnotice"`
 	Tooltip             string    `json:"tooltip"`
 	ShowNFO             string    `json:"shownfo"`
 	TimeType            string    `json:"timetype"`
@@ -121,8 +121,8 @@ type User struct {
 	TwoStepSecret       string    `json:"two_step_secret"`
 	SeedPoints          float64   `json:"seed_points"`
 	SeedPointsPerHour   float64   `json:"seed_points_per_hour"`
-	AttendanceCard      int32     `json:"attendance_card"`
-	OfferAllowedCount   int32     `json:"offer_allowed_count"`
+	AttendanceCard      int64     `json:"attendance_card"`
+	OfferAllowedCount   int64     `json:"offer_allowed_count"`
 	SeedPointsUpdatedAt time.Time `json:"seed_points_updated_at"`
 	SeedTimeUpdatedAt   time.Time `json:"seed_time_updated_at"`
 }
