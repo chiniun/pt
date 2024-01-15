@@ -64,6 +64,7 @@ type AnnounceResponse struct {
 type TrackerAnnounceUsecase struct {
 	urepo inter.UserRepo
 	trepo inter.TorrentRepo
+	prepo inter.PeerRepo
 	cache inter.CacheRepo
 	log   *log.Helper
 }
@@ -72,6 +73,7 @@ type TrackerAnnounceUsecase struct {
 func NewTrackerAnnounceUsecase(
 	urepo inter.UserRepo,
 	cache inter.CacheRepo,
+	prepo inter.PeerRepo,
 	trepo inter.TorrentRepo,
 	logger log.Logger) *TrackerAnnounceUsecase {
 	return &TrackerAnnounceUsecase{
@@ -217,10 +219,33 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 	}
 	passkey = user.Passkey //todo 这里会有全局passkey赋值
 
-	//TODO  GetIP, check port
-
-
 	var compact int
+	ip := in.IP
+	if in.Port > 0xffff {
+		return errors.New("invalid port")
+	}
+	p := net.ParseIP(ip) //Disable compact announce with IPv6
+	if p == nil {
+		compact = 0
+	}
+
+	var ipv4, ipv6 = ""
+	if p != nil {
+		if r := p.To4(); r != nil {
+			ipv4 = ip
+		} else {
+			ipv6 = ip
+		}
+	}
+	// todo 请求头里查询ipv4 或者 v6
+
+	peerIPV46 := ""
+	if ipv4 != "" {
+		peerIPV46 += fmt.Sprintf(", ipv4 = %s", &ipv4)
+	}
+	if ipv6 != "" {
+		peerIPV46 += fmt.Sprintf(", ipv6 = %s", &ipv6)
+	}
 
 	if portBlacklisted(in.Port) { //TODO
 		//warn port is blacklisted
@@ -417,25 +442,25 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 	}
 
 	if selfPeer.ID == 0 {
-		selfPeer,err = o.trepo.GetPeer(ctx,torrent.ID,user.Id,in.PeerID)
+		selfPeer, err = o.prepo.GetPeerView(ctx, torrent.ID, user.Id, in.PeerID)
 		if err != nil {
-			return resp,err
+			return resp, err
 		}
 	}
-	
-	if selfPeer.ID != 0 && in.Event != "" && self.Prevts > (time.Now().Unix() - int64(announceWait)) {
+
+	if selfPeer.ID != 0 && in.Event != "" && selfPeer.Prevts > (time.Now().Unix()-int64(announceWait)) {
 		//warn('There is a minimum announce time of ' . $announce_wait . ' seconds', $announce_wait);
 	}
 
- 	var isSeedBoxRuleEnabled  bool
+	var isSeedBoxRuleEnabled bool //TODO 配置文件里拿
+	var isIPSeedBox bool          // TODO 盒子判断
 
 	if isSeedBoxRuleEnabled {
-		if 
+		if ipv4 != "" {
+			isIPSeedBox = false
+		}
 	}
-
-
-	
-
+	o.log.Infow("isIPSeedBox", isIPSeedBox)
 
 	return
 }
