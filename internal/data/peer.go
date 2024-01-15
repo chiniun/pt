@@ -50,7 +50,7 @@ func (o *Peer) GetPeerView(ctx context.Context, tid, uid int64, peer_id string) 
 		return nil, errors.Wrap(err, "GetPeerView")
 	}
 
-	return &model.PeerView{}, nil
+	return peer, nil
 
 }
 
@@ -63,6 +63,15 @@ func (o *Peer) GetPeer(ctx context.Context, tid, uid int64, ip string) (*model.P
 		return nil, errors.Wrap(err, "GetPeer")
 	}
 
-	return &model.Peer{}, nil
+	return peer, nil
 
+}
+
+func (o *Peer) GetPeerListByUser(ctx context.Context, tid, uid int64) ([]*model.Peer, error) {
+	peers := make([]*model.Peer, 0)
+	err := o.data.DB.Model(new(model.Peer)).Where("torrent = ?", tid).Where("user_id = ?", uid).Find(&peers).Error
+	if err != nil {
+		return nil, errors.Wrap(err, "GetPeerListByUser")
+	}
+	return peers, nil
 }

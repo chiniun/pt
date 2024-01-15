@@ -300,7 +300,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 			return resp, err
 		}
 		// nil  查询数据库
-		torrent, err := o.trepo.FindByHash(infoHash)
+		torrent, err := o.trepo.FindByHash(ctx, infoHash)
 		if err != nil { //torrent不存在
 			firstNeedle := "info_hash="
 			queryString := in.RawQuery
@@ -461,6 +461,53 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 		}
 	}
 	o.log.Infow("isIPSeedBox", isIPSeedBox)
+
+	if selfPeer.ID == 0 {
+		sameIPRecord, err := o.prepo.GetPeer(ctx, torrent.ID, user.Id, ip)
+		if err == nil && sameIPRecord.ID != 0 && seeder == "yes" {
+			return resp, errors.New("You cannot seed the same torrent in the same location from more than 1 client.")
+		}
+
+		peers, err := o.prepo.GetPeerListByUser(ctx, torrent.ID, user.Id)
+		if err != nil {
+			return resp, err
+		}
+
+		if len(peers) >= 1 && seeder == "no" {
+			return resp, errors.New("You already are downloading the same torrent. You may only leech from one location at a time.")
+		}
+
+		if len(peers) >= 3 && seeder == "yes" {
+			return resp, errors.New("You cannot seed the same torrent from more than 3 locations.")
+		}
+
+		if user.Enabled == "no" {
+			return resp, errors.New("Your account is disabled!")
+		} else if user.Parked == "Yes" {
+			return resp, errors.New("Your account is parked! (Read the FAQ)")
+		} else if user.DownloadPos == "no" {
+			return resp, errors.New("Your downloading privileges have been disabled! (Read the rules)")
+		}
+
+		// 权限校验
+		if user.Class < constant.UC_VIP {
+			var ratio float64 = 999999999999999
+			if user.Downloaded > 0 {
+				ratio = float64(user.Uploaded) / float64(user.Downloaded)
+			}
+
+			var gigs = user.Downloaded / (1024*1024*1024)
+
+			var waitsystem string // yes or no //TODO GetConfig
+
+			if waitsystem == "yes" {
+				if 
+			}
+			
+
+		}
+
+	}
 
 	return
 }

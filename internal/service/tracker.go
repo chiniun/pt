@@ -51,7 +51,7 @@ func (o *TrackerService) Announce(ctx context.Context, in *v1.AnnounceRequest) (
 		RawQuery:      vals,
 	}
 
-	err := o.auc.AnounceHandler(ctx, temp)
+	_, err := o.auc.AnounceHandler(ctx, temp)
 	if err != nil {
 		log.Errorf("%#+v", err)
 		return nil, err
