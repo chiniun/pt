@@ -3,13 +3,16 @@ package db
 import (
 	"testing"
 
+	
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
+type Status int64
+
 type EunmSerializerTest struct {
-	Id     int64            `gorm:"column:id"`
-	Status migration.Status `gorm:"column:status;serializer:enum"`
+	Id     int64  `gorm:"column:id"`
+	Status Status `gorm:"column:status;serializer:enum"`
 }
 
 func (e EunmSerializerTest) TableName() string {
@@ -42,7 +45,7 @@ func TestEnumserializer(b *testing.T) {
 		b.Errorf("get error")
 	}
 
-	if e.Status != migration.Status_STATUS_MIGRATION_SUCCESSFUL {
+	if e.Status != Status(1) {
 		b.Errorf("insert data err")
 
 	}
@@ -65,7 +68,7 @@ func TestEnumserializer(b *testing.T) {
 }
 func insetBySerializer(db *gorm.DB) error {
 
-	result := db.Create(&EunmSerializerTest{Status: migration.Status_STATUS_MIGRATION_SUCCESSFUL})
+	result := db.Create(&EunmSerializerTest{Status: Status(1)})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -86,5 +89,5 @@ func getBySerializer(db *gorm.DB) (e EunmSerializerTest, err error) {
 
 func updateBySerializer(db *gorm.DB, id int64) (err error) {
 	return db.Model(EunmSerializerTest{}).Where("id = ?", id).
-		Updates(EunmSerializerTest{Status: migration.Status_STATUS_MIGRATING_ROLLBACKING}).Error
+		Updates(EunmSerializerTest{Status: Status(1)}).Error
 }

@@ -8,8 +8,8 @@ import (
 )
 
 type EunmTest struct {
-	Id     int64                       `gorm:"column:id"`
-	Status ProtoEnum[migration.Status] `gorm:"column:status"`
+	Id     int64             `gorm:"column:id"`
+	Status ProtoEnum[Status] `gorm:"column:status"`
 }
 
 func (e EunmTest) TableName() string {
@@ -40,7 +40,7 @@ func TestEnumdatatype(b *testing.T) {
 		b.Errorf("get error")
 	}
 
-	if res.Status.Data() != migration.Status_STATUS_MIGRATION_SUCCESSFUL {
+	if res.Status.Data() != Status(1) {
 		b.Errorf("status err:%v", res.Status.Data())
 
 	}
@@ -55,7 +55,7 @@ func TestEnumdatatype(b *testing.T) {
 func inset(db *gorm.DB) error {
 	// 链接数据库
 
-	result := db.Create(&EunmTest{Status: NewProtoEnum(migration.Status_STATUS_MIGRATION_SUCCESSFUL)})
+	result := db.Create(&EunmTest{Status: NewProtoEnum(Status(1))})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -76,6 +76,6 @@ func get(db *gorm.DB) (e *EunmTest, err error) {
 }
 
 func update(db *gorm.DB, id int64) (err error) {
-	return db.Model(EunmTest{}).Where("id = ?", id).Updates(EunmTest{Status: NewProtoEnum(migration.Status_STATUS_MIGRATION_FAILED)}).Error
+	return db.Model(EunmTest{}).Where("id = ?", id).Updates(EunmTest{Status: NewProtoEnum(Status(1))}).Error
 
 }

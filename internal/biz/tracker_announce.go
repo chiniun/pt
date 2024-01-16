@@ -1,19 +1,19 @@
 package biz
 
 import (
-	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
+	"github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
-	"github.com/xgfone/go-bt/tracker"
 	"gorm.io/gorm"
 
 	"pt/internal/biz/constant"
@@ -22,13 +22,13 @@ import (
 )
 
 type AnnounceRequest struct {
-	InfoHash      string `query:"info_hash" json:"info_hash,omitempty" bson:"info_hash" form:"info_hash"`
-	PeerID        string `query:"peer_id" json:"peer_id,omitempty" bson:"peer_id" form:"peer_id"`
+	InfoHash      string `binding:"required" query:"info_hash" json:"info_hash,omitempty" bson:"info_hash" form:"info_hash"`
+	PeerID        string `binding:"required" query:"peer_id" json:"peer_id,omitempty" bson:"peer_id" form:"peer_id"`
 	IP            string `query:"ip" json:"ip,omitempty" bson:"ip" form:"ip"`
-	Port          uint16 `query:"port" json:"port,omitempty" bson:"port" form:"port"`
-	Uploaded      uint   `query:"uploaded" json:"uploaded,omitempty" bson:"uploaded" form:"uploaded"`
-	Downloaded    uint   `query:"downloaded" json:"downloaded,omitempty" bson:"downloaded" form:"downloaded"`
-	Left          uint   `query:"left" json:"left,omitempty" bson:"left" form:"left"`
+	Port          uint16 `binding:"required" query:"port" json:"port,omitempty" bson:"port" form:"port"`
+	Uploaded      uint   `binding:"required" query:"uploaded" json:"uploaded,omitempty" bson:"uploaded" form:"uploaded"`
+	Downloaded    uint   `binding:"required" query:"downloaded" json:"downloaded,omitempty" bson:"downloaded" form:"downloaded"`
+	Left          uint   `binding:"required" query:"left" json:"left,omitempty" bson:"left" form:"left"`
 	Numwant       uint   `query:"numwant" json:"numwant,omitempty" bson:"numwant" form:"numwant"` //TODO num want, num_want
 	Key           string `query:"key" json:"key,omitempty" bson:"key" form:"key"`
 	Compact       bool   `query:"compact" json:"compact,omitempty" bson:"compact" form:"compact"`
@@ -38,12 +38,6 @@ type AnnounceRequest struct {
 	Passkey  string `json:"passkey,omitempty" bson:"passkey" form:"passkey"`
 	Authkey  string `json:"authkey,omitempty" bson:"authkey" form:"authkey"`
 	RawQuery string `json:"raw_query,omitempty" bson:"raw_query" form:"raw_query"`
-}
-
-type AnnounceRdequest struct {
-	tracker.AnnounceRequest
-	Passkey string `json:"passkey"`
-	Authkey string `json:"authkey"`
 }
 
 func (req *AnnounceRequest) IsSeeding() bool {
@@ -84,22 +78,112 @@ func NewTrackerAnnounceUsecase(
 	}
 }
 
-const (
-	CacheKey_TorrentNotExistsKey       = "torrent_not_exists"
-	CacheKey_AuthKeyInvalidKey         = "authkey_invalid"
-	CacheKey_PasskeyInvalidKey         = "passkey_invalid"
-	CacheKey_IsReAnnounceKey           = "isReAnnounce"
-	CacheKey_ReAnnounceCheckByAuthKey  = "reAnnounceCheckByAuthKey"
-	CacheKey_ReAnnounceCheckByInfoHash = "reAnnounceCheckByInfoHash"
-
-	CacheKey_UserPasskeyContent    = "user_passkey_%s_content"
-	CacheKey_TorrentHashkeyContent = "torrent_hash_%s_content"
+var (
+	ErrParamsInvalidInfoHash = errors.New("Invalid infohash")
+	ErrParmsInvalidPassKey   = errors.New("Invalid passkey")
+	ErrParamsInvalidAuthKey  = errors.New("authkey format error")
+	ErrAgentBlock            = errors.New("Browser access blocked!")
 )
 
-// AnounceCheck, data check before response
-func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *AnnounceRequest) (resp AnnounceResponse, err error) {
+type announceParamsChecker struct {
+	AReq *AnnounceRequest
+	Err  error
+}
 
-	//TODO: 1 authKey || passKey check
+func NewAnnounceParamsChecker() *announceParamsChecker {
+	return &announceParamsChecker{}
+}
+
+func (o *announceParamsChecker) Do(ctx http.Context) (*AnnounceRequest, error) {
+
+	o.CheckUserAgent(ctx)
+	o.Bind(ctx)
+
+	return o.AReq, o.Err
+}
+
+func (o *announceParamsChecker) CheckUserAgent(ctx http.Context) {
+	if o.Err != nil {
+		return
+	}
+
+	ua := ctx.Header().Get("User-Agent")
+	patterns := []string{
+		"^Mozilla/",
+		"^Opera/",
+		"^Links/",
+		"^Lynx/",
+	}
+
+	for _, pattern := range patterns {
+		match, err := regexp.MatchString(pattern, ua)
+		if err != nil {
+			o.Err = errors.WithStack(err)
+			return
+		}
+
+		if match {
+			o.Err = ErrAgentBlock
+			return
+		}
+	}
+
+}
+
+func (o *announceParamsChecker) Bind(ctx http.Context) {
+	if o.Err != nil {
+		return
+	}
+
+	query := ctx.Request().URL.RawQuery
+	req := new(AnnounceRequest)
+
+	err := ctx.Bind(req)
+	if err != nil {
+		o.Err = err
+		return
+	}
+	req.RawQuery = query
+	o.AReq = req
+
+	if len(req.InfoHash) != 20 {
+		o.Err = ErrParamsInvalidInfoHash
+	}
+
+	if req.Passkey != "" && len(req.Passkey) != 32 {
+		o.Err = ErrParmsInvalidPassKey
+		return
+	}
+
+	if req.Authkey != "" {
+		parts := strings.Split(req.Authkey, "|")
+		if len(parts) != 3 {
+			o.Err = ErrParamsInvalidAuthKey
+			return
+		}
+	}
+}
+
+func (o *TrackerAnnounceUsecase) AnnounceParams(ctx http.Context) (*AnnounceRequest, error) {
+
+	ac := NewAnnounceParamsChecker()
+
+	return ac.Do(ctx)
+}
+
+type lockParam struct {
+	User     string
+	Infohash string
+}
+
+// AnounceCheck, data check before response
+func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp AnnounceResponse, err error) {
+
+	// params check
+	in, err := o.AnnounceParams(ctx)
+	if err != nil {
+		return
+	}
 
 	var (
 		authKeyTid          string
@@ -111,23 +195,20 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 
 	authkey := in.Authkey
 	passkey := in.Passkey
-	infoHash := in.InfoHash
+	infoHash := string(in.InfoHash[:])
 
 	if authkey != "" {
 		parts := strings.Split(authkey, "|")
-		if len(parts) != 3 {
-			o.log.Warn("authkey format error")
-		}
 		authKeyTid = parts[0]
 		authKeyUid = parts[1]
-		userAuthenticateKey = parts[1]
+		userAuthenticateKey = authKeyUid
 		subAuthkey = fmt.Sprintf("%s|%s", authKeyTid, authKeyUid)
 
 		// check ReAnnounce
 		var isReAnnounce bool
-		lockParams := map[string]string{
-			"user":      authKeyUid,
-			"info_hash": infoHash,
+		lockParams := &lockParam{
+			User:     authKeyUid,
+			Infohash: infoHash,
 		}
 		lockString := buildQueryString(lockParams)
 		exist, err := o.cache.Lock(ctx, CacheKey_IsReAnnounceKey, lockString, 20)
@@ -602,22 +683,19 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 		user.Class < constant.UC_VIP &&
 		!isDonor &&
 		len(torrent.CategoryMode) != 0 {
-		
-			var ConfHrMod string
-			if ConfHrMod == constant.HR_MODE_GLOBAL || 
-			(ConfHrMod == constant.HR_MODE_MANUAL && torrent.HR == constant.HR_TORRENT_YES) {
-				
-			}
 
+		var ConfHrMod string
+		if ConfHrMod == constant.HR_MODE_GLOBAL ||
+			(ConfHrMod == constant.HR_MODE_MANUAL && torrent.HR == constant.HR_TORRENT_YES) {
+
+		}
 
 	}
-
 
 	// VIP do not calculate downloaded
-	if user.Class == constant.UC_VIP{
-		
-	}
+	if user.Class == constant.UC_VIP {
 
+	}
 
 	return
 }
@@ -629,15 +707,8 @@ func Max(a, b float64) float64 {
 	return b
 }
 
-func buildQueryString(params map[string]string) string {
-	query := ""
-	for key, value := range params {
-		if query != "" {
-			query += "&"
-		}
-		query += key + "=" + value
-	}
-	return query
+func buildQueryString(params *lockParam) string {
+	return fmt.Sprintf("user=%s&info_hash=%s", params.User, params.Infohash)
 }
 
 func portBlacklisted(port uint16) bool {

@@ -31,6 +31,5 @@ func NewGRPCServer(c *conf.Server,
 	}
 	srv := grpc.NewServer(opts...)
 	v1.RegisterGreeterServer(srv, greeter)
-	v1.RegisterTrackerServer(srv, tracker)
 	return srv
 }

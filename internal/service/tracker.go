@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	v1 "pt/api/pt/v1"
 	"pt/internal/biz"
 
@@ -30,36 +29,27 @@ func NewTrackerService(
 	}
 }
 
-// Sends a greeting
-func (o *TrackerService) Announce(ctx context.Context, in *v1.AnnounceRequest) (*v1.AnnounceReply, error) {
-	vals := ctx.(http.Context).Request().URL.RawQuery
-	temp := &biz.AnnounceRequest{
-		InfoHash:      in.GetInfoHash(),
-		PeerID:        in.GetPeerId(),
-		IP:            in.GetIp(),
-		Port:          uint16(in.GetPort()),
-		Uploaded:      uint(in.GetUploaded()),
-		Downloaded:    uint(in.GetDownloaded()),
-		Left:          uint(in.GetLeft()),
-		Numwant:       uint(in.GetNumwant()),
-		Key:           in.GetKey(),
-		Compact:       in.GetCompact(),
-		SupportCrypto: in.GetSupportcrypto(),
-		Event:         in.GetEvent(),
-		Passkey:       in.GetPasskey(),
-		Authkey:       in.GetAuthkey(),
-		RawQuery:      vals,
-	}
+func (s *TrackerService) AppendToServer(srv *http.Server) {
+	router := srv.Route("/pt/")
 
-	_, err := o.auc.AnounceHandler(ctx, temp)
-	if err != nil {
-		log.Errorf("%#+v", err)
-		return nil, err
-	}
+	// 授权
+	router.GET("/announce", s.Announce) // 步骤1中台首次安装url,后端验证完跳至前端authoration界面,用户填完domain后请求步骤2接口
+	router.GET("/scrape", s.Scrape)     // 步骤5, 中台confirm后回调应用的接口,应用获取中台信息
 
-	return nil, nil
 }
 
-func (o *TrackerService) Scrape(ctx context.Context, in *v1.ScrapeRequest) (*v1.ScrapeReply, error) {
+// Sends a greeting
+func (o *TrackerService) Announce(ctx http.Context) error {
+
+	_, err := o.auc.AnounceHandler(ctx)
+	if err != nil {
+		log.Errorf("%#+v", err)
+		return err
+	}
+
+	return nil
+}
+
+func (o *TrackerService) Scrape(ctx http.Context) error {
 	panic("not implemented") // TODO: Implement
 }

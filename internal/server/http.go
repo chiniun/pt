@@ -4,6 +4,7 @@ import (
 	v1 "pt/api/pt/v1"
 	"pt/internal/conf"
 	"pt/internal/service"
+	routeAppender "pt/third_party/http"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/middleware/recovery"
@@ -14,6 +15,7 @@ import (
 func NewHTTPServer(c *conf.Server,
 	greeter *service.GreeterService,
 	tracker *service.TrackerService,
+	routeAppender routeAppender.RouteAppender,
 	logger log.Logger) *http.Server {
 	var opts = []http.ServerOption{
 		http.Middleware(
@@ -30,7 +32,7 @@ func NewHTTPServer(c *conf.Server,
 		opts = append(opts, http.Timeout(c.Http.Timeout.AsDuration()))
 	}
 	srv := http.NewServer(opts...)
+	routeAppender.AppendToServer(srv)
 	v1.RegisterGreeterHTTPServer(srv, greeter)
-	v1.RegisterTrackerHTTPServer(srv, tracker)
 	return srv
 }
