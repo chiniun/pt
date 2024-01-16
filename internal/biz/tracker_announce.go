@@ -489,27 +489,144 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx context.Context, in *Announc
 			return resp, errors.New("Your downloading privileges have been disabled! (Read the rules)")
 		}
 
-		// 权限校验
+		// 非vip权限校验
 		if user.Class < constant.UC_VIP {
 			var ratio float64 = 999999999999999
 			if user.Downloaded > 0 {
 				ratio = float64(user.Uploaded) / float64(user.Downloaded)
 			}
 
-			var gigs = user.Downloaded / (1024*1024*1024)
+			var gigs = user.Downloaded / (1024 * 1024 * 1024)
 
 			var waitsystem string // yes or no //TODO GetConfig
+			var maxDlsSystem string
+			var wait int64
 
 			if waitsystem == "yes" {
-				if 
+				if gigs > 10 {
+					if ratio < 0.4 {
+						wait = 24
+					} else if ratio < 0.5 {
+						wait = 12
+					} else if ratio < 0.6 {
+						wait = 6
+					} else if ratio < 0.8 {
+						wait = 3
+					} else {
+						wait = 0
+					}
+
+					var elapsed = time.Now().Unix() - torrent.Timestamp // TODO
+					if elapsed < wait {
+						return resp, errors.New(fmt.Sprintf("Your ratio is too low! You need to wait %d to start", wait*3600-elapsed))
+					}
+				}
 			}
-			
+			var max int64
+			if maxDlsSystem == "yes" {
+				if gigs > 10 {
+					if ratio < 0.5 {
+						max = 1
+					} else if ratio < 0.65 {
+						max = 2
+					} else if ratio < 0.8 {
+						max = 3
+					} else if ratio < 0.95 {
+						max = 4
+					} else {
+						max = 0
+					}
+					if max > 0 {
+						peerCnt, err := o.prepo.CountPeersByUserAndSeedType(ctx, user.Id, "no")
+						if err != nil {
+							return resp, err
+						}
+						if peerCnt >= max {
+							return resp, errors.New(fmt.Sprintf("Your slot limit is reached! You may at most download %d torrents at the same time", max))
+						}
+					}
+				}
+			}
+		}
+
+		var ConfigPaidTorrentEnabled bool
+		var flag = seeder == "no" &&
+			user.SeedBonus != 0 &&
+			torrent.Price > 0 &&
+			torrent.Owner != user.Id &&
+			ConfigPaidTorrentEnabled
+
+		if flag { //redisLock
+			hasBuy, err := o.cache.Get(ctx, constant.CACHE_KEY_BOUGHT_USER_PREFIX, strconv.FormatInt(torrent.ID, 10))
+			if err != nil {
+				if errors.As(err, redis.Nil) {
+
+				}
+				return resp, err
+			}
+
+		}
+	} else {
+		var upthis, trueUpthis float64
+		upthis = Max(0, float64(in.Uploaded-uint(selfPeer.Uploaded)))
+		trueUpthis = upthis
+
+		var announcetime int64
+		if selfPeer.Seeder == "yes" {
+			announcetime = selfPeer.Announcetime
+		} else {
 
 		}
 
 	}
 
+	// set non-type event
+	var event string
+	if selfPeer.ID != 0 && in.Event == "stopped" {
+		err := o.prepo.Delete(ctx, selfPeer.ID)
+		if err != nil {
+			o.log.Error(err)
+		} else { // todo updateSnatched
+
+		}
+
+	} else if selfPeer.ID != 0 {
+
+	} else {
+
+	}
+
+	//handle hr
+	var isDonor bool
+	if in.Left > 0 || event == "completed" &&
+		user.Class < constant.UC_VIP &&
+		!isDonor &&
+		len(torrent.CategoryMode) != 0 {
+		
+			var ConfHrMod string
+			if ConfHrMod == constant.HR_MODE_GLOBAL || 
+			(ConfHrMod == constant.HR_MODE_MANUAL && torrent.HR == constant.HR_TORRENT_YES) {
+				
+			}
+
+
+	}
+
+
+	// VIP do not calculate downloaded
+	if user.Class == constant.UC_VIP{
+		
+	}
+
+
 	return
+}
+
+func Max(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func buildQueryString(params map[string]string) string {

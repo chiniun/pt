@@ -47,7 +47,6 @@ func (o *Cache) Get(ctx context.Context, pre, body string) (string, error) {
 		return "", errors.Wrap(err, "Get")
 	}
 	return result, nil
-
 }
 
 func (o *Cache) GetByKey(ctx context.Context, key string) (string, error) {

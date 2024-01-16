@@ -54,10 +54,10 @@ func (o *User) GetByAuthkey(ctx context.Context, key string) (*model.User, error
 
 // hard delete
 func (o *User) Delete(ctx context.Context, id int64) error {
-	return o.data.DB.WithContext(ctx).Delete("where id = ?", id).Error
+	return o.data.DB.WithContext(ctx).Where("id = ?", id).Delete(&model.User{}).Error
 }
 
 // hard delete
 func (o *User) HardDelete(ctx context.Context, id int64) error {
-	return o.data.DB.WithContext(ctx).Unscoped().Delete("where id = ?", id).Error
+	return o.data.DB.WithContext(ctx).Unscoped().Where("id = ?", id).Delete(&model.User{}).Error
 }

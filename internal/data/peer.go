@@ -75,3 +75,20 @@ func (o *Peer) GetPeerListByUser(ctx context.Context, tid, uid int64) ([]*model.
 	}
 	return peers, nil
 }
+
+func (o *Peer) CountPeersByUserAndSeedType(ctx context.Context, uid int64, seederType string) (int64, error) {
+	cnt := int64(0)
+	err := o.data.DB.Model(new(model.Peer)).Where("seeder = ?", seederType).Where("user_id = ?", uid).Count(&cnt).Error
+	if err != nil {
+		return cnt, errors.Wrap(err, "GetPeerListByUser")
+	}
+	return cnt, nil
+}
+
+func (o *Peer) Delete(ctx context.Context, id int64) error {
+	err := o.data.DB.Model(new(model.Peer)).Where("id = ?", id).Delete(new(model.Peer)).Error
+	if err != nil {
+		return errors.Wrap(err, "Delete")
+	}
+	return nil
+}
