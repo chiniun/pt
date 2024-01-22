@@ -2,9 +2,7 @@ package data
 
 import (
 	"context"
-	"crypto/md5"
 
-	"fmt"
 	"time"
 
 	kerr "github.com/go-kratos/kratos/v2/errors"
@@ -24,15 +22,9 @@ func NewCache(data *Data, logger log.Logger) *Cache {
 	}
 }
 
-func (o *Cache) Lock(ctx context.Context, lockKey, lockString string, sec time.Duration, isMd5 bool) (bool, error) {
-	var key string
-	if isMd5 {
-		key = fmt.Sprintf("%s:%x", lockKey, md5.Sum([]byte(lockString)))
-	} else {
-		key = fmt.Sprintf("%s:%x", lockKey, lockString)
+func (o *Cache) Lock(ctx context.Context, lock string, value interface{}, sec time.Duration) (bool, error) {
 
-	}
-	setResult, err := o.data.redisCli.SetNX(ctx, key, time.Now(), sec*time.Second).Result()
+	setResult, err := o.data.redisCli.SetNX(ctx, lock, value, sec*time.Second).Result()
 	if err != nil {
 		return true, errors.Wrap(err, "Lock")
 	}
@@ -40,8 +32,7 @@ func (o *Cache) Lock(ctx context.Context, lockKey, lockString string, sec time.D
 	return setResult, nil
 }
 
-func (o *Cache) Get(ctx context.Context, pre, body string) (string, error) {
-	key := pre + ":" + body
+func (o *Cache) Get(ctx context.Context, key string) (string, error) {
 	result, err := o.data.redisCli.Get(ctx, key).Result()
 	if err != nil {
 		return "", errors.Wrap(err, "Get")
@@ -49,16 +40,7 @@ func (o *Cache) Get(ctx context.Context, pre, body string) (string, error) {
 	return result, nil
 }
 
-func (o *Cache) GetByKey(ctx context.Context, key string) (string, error) {
-	result, err := o.data.redisCli.Get(ctx, key).Result()
-	if err != nil {
-		return "", errors.Wrap(err, "GetByKey")
-	}
-	return result, nil
-
-}
-
-func (o *Cache) Set(ctx context.Context, key, value string, sec time.Duration) (string, error) {
+func (o *Cache) Set(ctx context.Context, key string, value interface{}, sec time.Duration) (string, error) {
 
 	result, err := o.data.redisCli.Set(ctx, key, value, sec).Result()
 	if err != nil {

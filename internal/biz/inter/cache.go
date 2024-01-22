@@ -6,8 +6,7 @@ import (
 )
 
 type CacheRepo interface {
-	Lock(ctx context.Context, lockKey, lockString string, sec time.Duration, isMD5 bool) (bool, error)
-	Get(ctx context.Context, pre, body string) (string, error)
-	GetByKey(ctx context.Context, key string) (string, error)
-	Set(ctx context.Context, key, value string, sec time.Duration) (string, error)
+	Lock(ctx context.Context, lock string, value interface{}, sec time.Duration) (bool, error)
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key string, value interface{}, sec time.Duration) (string, error)
 }

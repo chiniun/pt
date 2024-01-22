@@ -1,6 +1,7 @@
 package biz
 
 import (
+	"crypto/md5"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -176,6 +177,11 @@ type lockParam struct {
 	Infohash string
 }
 
+type lockPasskeyParam struct {
+	Passkey  string
+	Infohash string
+}
+
 // AnounceCheck, data check before response
 func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp AnnounceResponse, err error) {
 
@@ -210,50 +216,55 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			User:     authKeyUid,
 			Infohash: infoHash,
 		}
-		lockString := buildQueryString(lockParams)
-		exist, err := o.cache.Lock(ctx, CacheKey_IsReAnnounceKey, lockString, 20)
+		lockString := httpBuildQueryString(lockParams)
+		lk := contentKeyCombine(constant.CacheKey_IsReAnnounceKey, string(md5.New().Sum([]byte(lockString))))
+		success, err := o.cache.Lock(ctx, lk, time.Now().Unix(), 20)
 		if err != nil {
 			return resp, err
 		}
-		if !exist { //false 键已存在
+		if !success { //false 键已存在 // 锁失败
 			isReAnnounce = true
 		}
 
 		if !isReAnnounce {
-			exist, err = o.cache.Lock(ctx, CacheKey_ReAnnounceCheckByAuthKey, subAuthkey, 60)
+			rcLock := contentKeyCombine(constant.CacheKey_ReAnnounceCheckByAuthKey, subAuthkey)
+			success, err = o.cache.Lock(ctx, rcLock, time.Now().Unix(), 60)
 			if err != nil {
 				return resp, err
 			}
-			if !exist { //false 键已存在 //TODO:
-				//msg := "Request too frequent(a)"
-
+			if !success { //false 键已存在
+				return resp, errors.New("Request too frequent")
 			}
 		}
 
-		res, err := o.cache.Get(ctx, CacheKey_AuthKeyInvalidKey, authkey)
+		aInKey := contentKeyCombine(constant.CacheKey_AuthKeyInvalidKey, authkey)
+		res, err := o.cache.Get(ctx, aInKey)
 		if err != nil {
-			return resp, err // 不存在会报错吗
+			return resp, err
 		}
-		if len(res) != 0 { //TODO
-			//msg := "Invalid authkey"
+		if len(res) != 0 {
+			return resp, errors.New("Invalid authkey")
 		}
+
 	} else if passkey != "" {
+
 		userAuthenticateKey = passkey
 
-		res, err := o.cache.Get(ctx, CacheKey_PasskeyInvalidKey, passkey)
+		pInkey := contentKeyCombine(constant.CacheKey_PasskeyInvalidKey, passkey)
+		res, err := o.cache.Get(ctx, pInkey)
 		if err != nil {
-			return resp, err // 不存在会报错吗
+			return resp, err
 		}
-		if len(res) != 0 { //TODO
-			//msg := "Passkey Invalid"
+		if len(res) != 0 {
+			return resp, errors.New("Passkey invalid")
 		}
 
-		lockParams := map[string]string{
-			"info_hash": infoHash,
-			"passkey":   passkey,
+		lockParams := &lockPasskeyParam{
+			Infohash: infoHash,
+			Passkey:  passkey,
 		}
-		lockString := buildQueryString(lockParams)
-		exist, err := o.cache.Lock(ctx, CacheKey_IsReAnnounceKey, lockString, 20)
+		lockString := httpBuildPasskeyQueryString(lockParams)
+		exist, err := o.cache.Lock(ctx, lockString, time.Now().Unix(), 20)
 		if err != nil {
 			return resp, err
 		}
@@ -262,28 +273,27 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		}
 
 	} else {
-		// todo
-		//warn("Require passkey or authkey")
+		return resp, errors.New("Require passkey or authkey")
 	}
 
-	exist, err := o.cache.Get(ctx, CacheKey_TorrentNotExistsKey, infoHash)
-	if err != nil { //TODO ?
+	// 判断种子是否存在
+	exist, err := o.cache.Get(ctx, contentKeyCombine(constant.CacheKey_TorrentNotExistsKey, infoHash))
+	if err != nil {
 		return resp, err
 	}
-	if len(exist) == 0 { //false 键已存在
-		//msg := "Torrent not exists"
+	if len(exist) != 0 { //false 键已存在
+		return resp, errors.New("Torrent not exists")
 	}
 
 	if !isReAnnounce {
-		torrentReAnnounceKey := fmt.Sprintf("reAnnounceCheckByInfoHash:%s", userAuthenticateKey)
+		torrentReAnnounceKey := fmt.Sprintf("reAnnounceCheckByInfoHash:%s:%s", userAuthenticateKey, infoHash)
 
-		exist, err := o.cache.Lock(ctx, torrentReAnnounceKey, infoHash, 60)
+		exist, err := o.cache.Lock(ctx, torrentReAnnounceKey, time.Now().Unix(), 60)
 		if err != nil {
 			return resp, err
 		}
-		if !exist { //false 键已存在 //TODO:
-			//$msg = "Request too frequent(h)";
-			//do_log(sprintf("[ANNOUNCE] %s key: %s already exists, value: %s", $msg, $torrentReAnnounceKey, TIMENOW));
+		if !exist { //false 键已存在
+			return resp, errors.New("Request too frequent")
 		}
 	}
 
@@ -292,7 +302,8 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	//check authkey //todo authKey not exist
 	user, err := o.urepo.GetByAuthkey(ctx, authkey)
 	if err != nil {
-		_, errLock := o.cache.Lock(ctx, CacheKey_AuthKeyInvalidKey, authkey, 24*3600)
+		key := contentKeyCombine(constant.CacheKey_AuthKeyInvalidKey, authkey)
+		_, errLock := o.cache.Lock(ctx, key, time.Now().Unix(), 24*3600)
 		if errLock != nil {
 			return resp, errLock
 		}
@@ -300,17 +311,17 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	}
 	passkey = user.Passkey //todo 这里会有全局passkey赋值
 
-	var compact int
+	var compact int //是否压缩
 	ip := in.IP
 	if in.Port > 0xffff {
-		return errors.New("invalid port")
+		return resp, errors.New("invalid port")
 	}
 	p := net.ParseIP(ip) //Disable compact announce with IPv6
 	if p == nil {
 		compact = 0
 	}
 
-	var ipv4, ipv6 = ""
+	var ipv4, ipv6 = "", ""
 	if p != nil {
 		if r := p.To4(); r != nil {
 			ipv4 = ip
@@ -318,8 +329,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			ipv6 = ip
 		}
 	}
-	// todo 请求头里查询ipv4 或者 v6
-
+	// TODO _GET["ipv4"]
 	peerIPV46 := ""
 	if ipv4 != "" {
 		peerIPV46 += fmt.Sprintf(", ipv4 = %s", &ipv4)
@@ -328,12 +338,12 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		peerIPV46 += fmt.Sprintf(", ipv6 = %s", &ipv6)
 	}
 
-	if portBlacklisted(in.Port) { //TODO
-		//warn port is blacklisted
+	if portBlacklisted(in.Port) {
+		return resp, errors.New(fmt.Sprintf("Port %d is blacklisted.", in.Port))
 	}
 
 	// return peer list limit
-	rsize := 50
+	rsize := 50 //TODO 暂时强制返回50条
 
 	// seeder
 	var seeder = "no"
@@ -343,8 +353,8 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 
 	o.log.Info(seeder, rsize)
 
-	uInfoCacheKey := contentKeyCombine(CacheKey_UserPasskeyContent, passkey)
-	azStr, err := o.cache.GetByKey(ctx, uInfoCacheKey)
+	uInfoCacheKey := contentKeyCombine(constant.CacheKey_UserPasskeyContent, passkey)
+	azStr, err := o.cache.Get(ctx, uInfoCacheKey)
 	if err != nil {
 		return resp, err
 	}
@@ -352,11 +362,8 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		user, err = o.urepo.GetByPasskey(ctx, passkey)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				_, errLock := o.cache.Lock(ctx, CacheKey_PasskeyInvalidKey, passkey, 24*3600)
-				if errLock != nil {
-					return resp, nil
-				}
-				//TODO return error
+				o.cache.Lock(ctx, contentKeyCombine(constant.CacheKey_PasskeyInvalidKey, passkey), time.Now().Unix(), 24*3600)
+				return resp, errors.New("Invalid passkey! Re-download the .torrent")
 			}
 			return resp, err
 		}
@@ -369,6 +376,10 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			return resp, err
 		}
 	}
+
+	// UserExist
+
+	//IsDono
 
 	// checkclient
 	// checkUserAgent
@@ -707,8 +718,12 @@ func Max(a, b float64) float64 {
 	return b
 }
 
-func buildQueryString(params *lockParam) string {
+func httpBuildQueryString(params *lockParam) string {
 	return fmt.Sprintf("user=%s&info_hash=%s", params.User, params.Infohash)
+}
+
+func httpBuildPasskeyQueryString(params *lockPasskeyParam) string {
+	return fmt.Sprintf("passkey=%s&info_hash=%s", params.Passkey, params.Infohash)
 }
 
 func portBlacklisted(port uint16) bool {
@@ -740,7 +755,7 @@ func portBlacklisted(port uint16) bool {
 }
 
 func contentKeyCombine(key, body string) string {
-	return fmt.Sprintf(key, body)
+	return fmt.Sprintf("%s:%s", key, body)
 }
 
 func hashPad(hash string) string {
@@ -764,4 +779,16 @@ func concatIPAndPort(ipv4 string, port uint16) []byte {
 	binary.BigEndian.PutUint16(portBytes, port)
 
 	return append(ipv4Bytes, portBytes...)
+}
+
+func isDono(u *model.User) bool {
+	if u.Donor != "yes" {
+		return false
+	}
+	if u.DonorUntil == nil || u.DonorUntil == time.ti{
+
+	}
+
+
+	return true
 }

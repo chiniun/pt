@@ -8,9 +8,9 @@ import (
 
 func TestCache_Get(t *testing.T) {
 
-	data, err := cache.Get(context.TODO(), "pre","body")
+	data, err := cache.Get(context.TODO(), "key")
 	if err != nil {
-		fmt.Println(fmt.Sprintf("%#+v",err))
+		fmt.Println(fmt.Sprintf("%#+v", err))
 	}
 	t.Log(data)
 }
