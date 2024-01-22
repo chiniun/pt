@@ -36,7 +36,7 @@ type PeerView struct {
 	Torrent             int64    `json:"torrent"`
 	PeerID              string    `json:"peer_id"`
 	IP                  string    `json:"ip"`
-	Port                int64    `json:"port"`
+	Port                uint16    `json:"port"`
 	Uploaded            int64    `json:"uploaded"`
 	Downloaded          int64    `json:"downloaded"`
 	ToGo                int64    `json:"to_go"`

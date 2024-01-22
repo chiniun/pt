@@ -46,12 +46,12 @@ func (req *AnnounceRequest) IsSeeding() bool {
 }
 
 type AnnounceResponse struct {
-	Interval    int    `bencode:"interval"`
-	MinInterval int    `bencode:"min interval"`
-	Complete    int    `bencode:"complete"`
-	Incomplete  int    `bencode:"incomplete"`
-	Peers       []byte `bencode:"peers"`
-	PeersIPv6   []byte `bencode:"peers_ipv6"`
+	Interval    int         `bencode:"interval"`
+	MinInterval int         `bencode:"min interval"`
+	Complete    int         `bencode:"complete"`
+	Incomplete  int         `bencode:"incomplete"`
+	Peers       interface{} `bencode:"peers"`
+	PeersIPv6   interface{} `bencode:"peers_ipv6"`
 }
 
 // TrackerAnnounceRepo
@@ -103,6 +103,7 @@ func (o *announceParamsChecker) Do(ctx http.Context) (*AnnounceRequest, error) {
 	return o.AReq, o.Err
 }
 
+// TODO checkclient
 func (o *announceParamsChecker) CheckUserAgent(ctx http.Context) {
 	if o.Err != nil {
 		return
@@ -217,7 +218,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			Infohash: infoHash,
 		}
 		lockString := httpBuildQueryString(lockParams)
-		lk := contentKeyCombine(constant.CacheKey_IsReAnnounceKey, string(md5.New().Sum([]byte(lockString))))
+		lk := strContactWithColon(constant.CacheKey_IsReAnnounceKey, string(md5.New().Sum([]byte(lockString))))
 		success, err := o.cache.Lock(ctx, lk, time.Now().Unix(), 20)
 		if err != nil {
 			return resp, err
@@ -227,7 +228,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		}
 
 		if !isReAnnounce {
-			rcLock := contentKeyCombine(constant.CacheKey_ReAnnounceCheckByAuthKey, subAuthkey)
+			rcLock := strContactWithColon(constant.CacheKey_ReAnnounceCheckByAuthKey, subAuthkey)
 			success, err = o.cache.Lock(ctx, rcLock, time.Now().Unix(), 60)
 			if err != nil {
 				return resp, err
@@ -237,7 +238,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			}
 		}
 
-		aInKey := contentKeyCombine(constant.CacheKey_AuthKeyInvalidKey, authkey)
+		aInKey := strContactWithColon(constant.CacheKey_AuthKeyInvalidKey, authkey)
 		res, err := o.cache.Get(ctx, aInKey)
 		if err != nil {
 			return resp, err
@@ -250,7 +251,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 
 		userAuthenticateKey = passkey
 
-		pInkey := contentKeyCombine(constant.CacheKey_PasskeyInvalidKey, passkey)
+		pInkey := strContactWithColon(constant.CacheKey_PasskeyInvalidKey, passkey)
 		res, err := o.cache.Get(ctx, pInkey)
 		if err != nil {
 			return resp, err
@@ -277,9 +278,9 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	}
 
 	// 判断种子是否存在
-	exist, err := o.cache.Get(ctx, contentKeyCombine(constant.CacheKey_TorrentNotExistsKey, infoHash))
+	exist, err := o.cache.Get(ctx, strContactWithColon(constant.CacheKey_TorrentNotExistsKey, infoHash))
 	if err != nil {
-		return resp, err
+		return
 	}
 	if len(exist) != 0 { //false 键已存在
 		return resp, errors.New("Torrent not exists")
@@ -302,12 +303,12 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	//check authkey //todo authKey not exist
 	user, err := o.urepo.GetByAuthkey(ctx, authkey)
 	if err != nil {
-		key := contentKeyCombine(constant.CacheKey_AuthKeyInvalidKey, authkey)
+		key := strContactWithColon(constant.CacheKey_AuthKeyInvalidKey, authkey)
 		_, errLock := o.cache.Lock(ctx, key, time.Now().Unix(), 24*3600)
 		if errLock != nil {
 			return resp, errLock
 		}
-		return resp, err
+		return
 	}
 	passkey = user.Passkey //todo 这里会有全局passkey赋值
 
@@ -353,7 +354,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 
 	o.log.Info(seeder, rsize)
 
-	uInfoCacheKey := contentKeyCombine(constant.CacheKey_UserPasskeyContent, passkey)
+	uInfoCacheKey := strFmtWithInsert(constant.CacheKey_UserPasskeyContent, passkey)
 	azStr, err := o.cache.Get(ctx, uInfoCacheKey)
 	if err != nil {
 		return resp, err
@@ -362,7 +363,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		user, err = o.urepo.GetByPasskey(ctx, passkey)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				o.cache.Lock(ctx, contentKeyCombine(constant.CacheKey_PasskeyInvalidKey, passkey), time.Now().Unix(), 24*3600)
+				o.cache.Lock(ctx, strContactWithColon(constant.CacheKey_PasskeyInvalidKey, passkey), time.Now().Unix(), 24*3600)
 				return resp, errors.New("Invalid passkey! Re-download the .torrent")
 			}
 			return resp, err
@@ -380,13 +381,12 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	// UserExist
 
 	//IsDono
+	var isDonor = isDono(user)
 
-	// checkclient
-	// checkUserAgent
+	//TODO: showclienterror
 
 	// checkTorrent
-	toData, err := o.cache.GetByKey(ctx,
-		contentKeyCombine(CacheKey_TorrentHashkeyContent, infoHash))
+	toData, err := o.cache.Get(ctx, strFmtWithInsert(constant.CacheKey_TorrentHashkeyContent, infoHash))
 	if err != nil {
 		if !errors.As(err, redis.Nil) {
 			return resp, err
@@ -403,18 +403,20 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			} else {
 				end += start
 			}
-			infoHashUrlEncode := queryString[start:end]
+			infoHashUrlEncode := queryString[start:end] //TODO 这里为什么用encode,缓存会Miss
 			o.log.Errorf("[TORRENT NOT EXISTS] params: %s, infoHashUrlEncode: %s\n", queryString, infoHashUrlEncode)
 			o.cache.Set(ctx,
-				fmt.Sprintf("%s:%s", CacheKey_TorrentNotExistsKey, infoHashUrlEncode), time.Now().Format(time.RFC3339), 24*3600)
+				strContactWithColon(constant.CacheKey_TorrentNotExistsKey, infoHashUrlEncode),
+				time.Now().Format(time.RFC3339), 24*3600)
 
 			return resp, errors.Wrap(err, "torrent not registered with this tracker")
 		}
 
 		tobyte, _ := json.Marshal(torrent)
 		toData = string(tobyte)
-		o.cache.Set(ctx, contentKeyCombine(CacheKey_TorrentHashkeyContent, infoHash), toData, 350)
+		o.cache.Set(ctx, strFmtWithInsert(constant.CacheKey_TorrentHashkeyContent, infoHash), toData, 350)
 	}
+
 	torrent := new(model.TorrentView)
 	err = json.Unmarshal([]byte(toData), torrent)
 	if err != nil {
@@ -422,17 +424,18 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	}
 
 	if authKeyTid != "" && authKeyTid != strconv.FormatInt(int64(torrent.ID), 10) {
-		_, err = o.cache.Lock(ctx, CacheKey_AuthKeyInvalidKey, authkey, 24*3600, false)
-		if err != nil {
-			return resp, err
+		err = errors.New("Invalid authkey")
+		_, errT := o.cache.Lock(ctx, strContactWithColon(constant.CacheKey_AuthKeyInvalidKey, authkey), time.Now().Unix(), 24*3600)
+		if errT != nil {
+			o.log.Errorw("strContactWithColon")
 		}
-		//do_log("[ANNOUNCE] $msg");
-		//warn($msg);
+		return
 	}
 
-	if torrent.Banned == "yes" {
+	if torrent.Banned == "yes" { //TODO 未判断用户权限
 		return resp, errors.WithStack(errors.New("torrents banned"))
 	}
+
 	if torrent.ApprovalStatus != constant.APPROVAL_STATUS_ALLOW {
 		return resp, errors.WithStack(errors.New("torrent review not approved"))
 	}
@@ -487,7 +490,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	}
 
 	// GetPeerList
-	peers, err := o.trepo.GetPeerList(ctx, torrent.ID, onlyLeechQuery, limit)
+	peers, err := o.prepo.GetPeerList(ctx, torrent.ID, onlyLeechQuery, limit)
 	if err != nil {
 		return
 	}
@@ -495,19 +498,25 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	if in.Event == "stop" {
 
 	} else {
+		var tmpPeerv4Bytes []byte
+		var tmpPeerv6Bytes []byte
+
+		var tmpPeerV4Bins []model.PeerBin
+		var tmpPeerV6Bins []model.PeerBin
+
 		for _, peer := range peers {
 			peer.PeerID = hashPad(peer.PeerID)
-			if peer.PeerID == in.PeerID && peer.UserID == uint32(user.Id) {
+			if peer.PeerID == in.PeerID && peer.UserID == user.Id {
 				selfPeer = peer
 				continue
 			}
 
 			if compact == 1 {
 				if peer.IPv4 != "" {
-					resp.Peers = append(resp.Peers, concatIPAndPort(peer.IPv4, peer.Port)...)
+					tmpPeerv4Bytes = append(tmpPeerv4Bytes, concatIPAndPort(peer.IPv4, peer.Port)...)
 				}
 				if peer.IPv6 != "" {
-					resp.PeersIPv6 = append(resp.PeersIPv6, concatIPAndPort(peer.IPv6, peer.Port)...)
+					tmpPeerv6Bytes = append(tmpPeerv6Bytes, concatIPAndPort(peer.IPv6, peer.Port)...)
 				}
 			} else {
 				if peer.IPv4 != "" {
@@ -516,7 +525,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 						IP:     peer.IPv4,
 						Port:   int32(peer.Port),
 					}
-					resp.Peers = append(resp.Peers, tmpPeer)
+					tmpPeerV4Bins = append(tmpPeerV4Bins, tmpPeer)
 				}
 
 				if peer.IPv6 != "" {
@@ -525,12 +534,19 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 						IP:     peer.IPv6,
 						Port:   int32(peer.Port),
 					}
-					resp.Peers = append(resp.Peers, tmpPeer) //todo 这里也用Peers吗
+					tmpPeerV6Bins = append(tmpPeerV6Bins, tmpPeer) //todo 这里也用Peers吗
 				}
 			}
 
 		}
 
+		if compact == 1 {
+			resp.Peers = tmpPeerv4Bytes
+			resp.PeersIPv6 = tmpPeerv6Bytes
+		} else {
+			resp.Peers = tmpPeerV4Bins
+			resp.PeersIPv6 = tmpPeerV6Bins
+		}
 	}
 
 	if selfPeer.ID == 0 {
@@ -540,8 +556,10 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		}
 	}
 
+	o.log.Infow("selfPeer", selfPeer)
+
 	if selfPeer.ID != 0 && in.Event != "" && selfPeer.Prevts > (time.Now().Unix()-int64(announceWait)) {
-		//warn('There is a minimum announce time of ' . $announce_wait . ' seconds', $announce_wait);
+		return resp, errors.New(fmt.Sprintf("There is a minimum announce time: %d wait", announceWait))
 	}
 
 	var isSeedBoxRuleEnabled bool //TODO 配置文件里拿
@@ -689,7 +707,6 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	}
 
 	//handle hr
-	var isDonor bool
 	if in.Left > 0 || event == "completed" &&
 		user.Class < constant.UC_VIP &&
 		!isDonor &&
@@ -754,8 +771,12 @@ func portBlacklisted(port uint16) bool {
 	return false
 }
 
-func contentKeyCombine(key, body string) string {
+func strContactWithColon(key, body string) string {
 	return fmt.Sprintf("%s:%s", key, body)
+}
+
+func strFmtWithInsert(key, body string) string {
+	return fmt.Sprintf(key, body)
 }
 
 func hashPad(hash string) string {
@@ -785,10 +806,12 @@ func isDono(u *model.User) bool {
 	if u.Donor != "yes" {
 		return false
 	}
-	if u.DonorUntil == nil || u.DonorUntil == time.ti{
-
+	if u.DonorUntil == nil ||
+		u.DonorUntil.Compare(time.Now()) == 1 ||
+		u.DonorUntil.Format("2006-01-02 15:04:05") == "0000-00-00 00:00:00" ||
+		u.DonorUntil.Format("2006-01-02 15:04:05") == "0001-01-01 00:00:00" {
+		return true
 	}
 
-
-	return true
+	return false
 }
