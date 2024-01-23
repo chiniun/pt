@@ -49,3 +49,11 @@ func (o *Cache) Set(ctx context.Context, key string, value interface{}, sec time
 	return result, nil
 
 }
+
+func (o *Cache) HGet(ctx context.Context, key, field string) (string, error) {
+	result, err := o.data.redisCli.HGet(ctx, key,field).Result()
+	if err != nil {
+		return "", errors.Wrap(err, "HGet")
+	}
+	return result, nil
+}

@@ -667,7 +667,8 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			ConfigPaidTorrentEnabled
 
 		if flag { //redisLock
-			hasBuy, err := o.cache.Get(ctx, constant.CACHE_KEY_BOUGHT_USER_PREFIX, strconv.FormatInt(torrent.ID, 10))
+			hasBuyCacheKey := strContactWithColon(constant.CACHE_KEY_BOUGHT_USER_PREFIX, strconv.FormatInt(torrent.ID, 10))
+			hasBuy, err := o.cache.HGet(ctx, hasBuyCacheKey, strconv.FormatInt(user.Id, 10))
 			if err != nil {
 				if errors.As(err, redis.Nil) {
 

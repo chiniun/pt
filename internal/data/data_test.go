@@ -27,7 +27,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	flag.StringVar(&flagconf, "conf", "../../configs", "config path, eg: -conf config.yaml")
+	flag.StringVar(&flagconf, "conf", "../../configs", "config path, eg: -conf config_test.yaml")
 
 	c := config.New(
 		config.WithSource(

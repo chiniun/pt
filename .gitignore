@@ -38,3 +38,6 @@ bin/
 *.swp
 
 bin/
+
+
+/configs/config_test.yaml
