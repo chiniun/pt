@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net"
 	"regexp"
 	"strconv"
@@ -659,6 +660,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			}
 		}
 
+		//buy torrent
 		var ConfigPaidTorrentEnabled bool
 		var flag = seeder == "no" &&
 			user.SeedBonus != 0 &&
@@ -670,23 +672,48 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			hasBuyCacheKey := strContactWithColon(constant.CACHE_KEY_BOUGHT_USER_PREFIX, strconv.FormatInt(torrent.ID, 10))
 			hasBuy, err := o.cache.HGet(ctx, hasBuyCacheKey, strconv.FormatInt(user.Id, 10))
 			if err != nil {
-				if errors.As(err, redis.Nil) {
+				if errors.As(err, redis.Nil) { // 不存在
 
 				}
 				return resp, err
 			}
 
 		}
-	} else {
-		var upthis, trueUpthis float64
+	} else { // continue an existing session
+
+		var upthis, trueUpthis, downthis, trueDownthis float64
 		upthis = Max(0, float64(in.Uploaded-uint(selfPeer.Uploaded)))
 		trueUpthis = upthis
+		downthis = Max(0, float64(in.Downloaded)-float64(selfPeer.Downloaded))
+		trueDownthis = downthis
+		var isCheater bool
+		var seedTime int64
+		var leechTime int64 // TODO: where can find
 
 		var announcetime int64
 		if selfPeer.Seeder == "yes" {
-			announcetime = selfPeer.Announcetime
+			announcetime = selfPeer.Announcetime + seedTime
 		} else {
+			announcetime = selfPeer.Announcetime + leechTime
+		}
 
+		if selfPeer.Announcetime > 0 &&
+			isSeedBoxRuleEnabled &&
+			!(user.Class >= constant.UC_VIP || isDonor) &&
+			isIPSeedBox {
+
+			// 获取速率设置项
+			var notSeedBoxMaxSpeedMbps = 10 //TODO 获取速率设置项
+			upSpeedMbps := calculateUpSpeedMbps(trueUpthis, selfPeer.Announcetime)
+			if upSpeedMbps > float64(notSeedBoxMaxSpeedMbps) {
+				//TODO 下载超速
+				//updateDownloadPrivileges()
+				//err
+				return
+			}
+
+			//TODO checkCheatre
+			//cheaterdet_security
 		}
 
 	}
@@ -815,4 +842,10 @@ func isDono(u *model.User) bool {
 	}
 
 	return false
+}
+
+func calculateUpSpeedMbps(trueupthis float64, announcetime int64) float64 {
+	upSpeedMbps := ((trueupthis / float64(announcetime)) / 1024 / 1024) * 8
+	upSpeedMbps = math.Round(upSpeedMbps*100) / 100 // 保留两位小数
+	return upSpeedMbps
 }
