@@ -1,0 +1,11 @@
+package inter
+
+import (
+	"context"
+	"pt/internal/biz/model"
+)
+
+type SnatchedRepo interface {
+	GetSnatched(ctx context.Context, tid, uid int64) (*model.Snatched, error)
+	UpdateSnatchedInfo(ctx context.Context, snatchid, upload, download, left int64) error
+}

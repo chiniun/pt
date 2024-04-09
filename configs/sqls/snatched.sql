@@ -1,0 +1,20 @@
+CREATE TABLE `nexusphp`.`snatched`  (
+  `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  `torrentid` mediumint(8) UNSIGNED NOT NULL DEFAULT 0,
+  `userid` mediumint(8) UNSIGNED NOT NULL DEFAULT 0,
+  `ip` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `port` smallint(5) UNSIGNED NOT NULL DEFAULT 0,
+  `uploaded` bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+  `downloaded` bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+  `to_go` bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+  `seedtime` int(10) UNSIGNED NOT NULL DEFAULT 0,
+  `leechtime` int(10) UNSIGNED NOT NULL DEFAULT 0,
+  `last_action` datetime NULL DEFAULT NULL,
+  `startdat` datetime NULL DEFAULT NULL,
+  `completedat` datetime NULL DEFAULT NULL,
+  `finished` enum('yes','no') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'no',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `torrentid_userid`(`torrentid`, `userid`) USING BTREE,
+  INDEX `userid`(`userid`) USING BTREE,
+  INDEX `snatched_completedat_index`(`completedat`) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;

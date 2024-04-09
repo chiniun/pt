@@ -58,18 +58,19 @@ type AnnounceResponse struct {
 // TrackerAnnounceRepo
 // TrackerUsecase is a Tracker usecase.
 type TrackerAnnounceUsecase struct {
-	urepo inter.UserRepo
-	trepo inter.TorrentRepo
-	prepo inter.PeerRepo
-	cache inter.CacheRepo
-	log   *log.Helper
+	urepo  inter.UserRepo
+	trepo  inter.TorrentRepo
+	peerpo inter.PeerRepo
+	cache  inter.CacheRepo
+	snatch inter.SnatchedRepo
+	log    *log.Helper
 }
 
 // NewTrackerAnnounceUsecase new a Tracker usecase.
 func NewTrackerAnnounceUsecase(
 	urepo inter.UserRepo,
 	cache inter.CacheRepo,
-	prepo inter.PeerRepo,
+	peerpo inter.PeerRepo,
 	trepo inter.TorrentRepo,
 	logger log.Logger) *TrackerAnnounceUsecase {
 	return &TrackerAnnounceUsecase{
@@ -491,7 +492,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	}
 
 	// GetPeerList
-	peers, err := o.prepo.GetPeerList(ctx, torrent.ID, onlyLeechQuery, limit)
+	peers, err := o.peerpo.GetPeerList(ctx, torrent.ID, onlyLeechQuery, limit)
 	if err != nil {
 		return
 	}
@@ -551,7 +552,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	}
 
 	if selfPeer.ID == 0 {
-		selfPeer, err = o.prepo.GetPeerView(ctx, torrent.ID, user.Id, in.PeerID)
+		selfPeer, err = o.peerpo.GetPeerView(ctx, torrent.ID, user.Id, in.PeerID)
 		if err != nil {
 			return resp, err
 		}
@@ -573,13 +574,15 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	}
 	o.log.Infow("isIPSeedBox", isIPSeedBox)
 
+	var snatchInfo *model.Snatched
+
 	if selfPeer.ID == 0 {
-		sameIPRecord, err := o.prepo.GetPeer(ctx, torrent.ID, user.Id, ip)
+		sameIPRecord, err := o.peerpo.GetPeer(ctx, torrent.ID, user.Id, ip)
 		if err == nil && sameIPRecord.ID != 0 && seeder == "yes" {
 			return resp, errors.New("You cannot seed the same torrent in the same location from more than 1 client.")
 		}
 
-		peers, err := o.prepo.GetPeerListByUser(ctx, torrent.ID, user.Id)
+		peers, err := o.peerpo.GetPeerListByUser(ctx, torrent.ID, user.Id)
 		if err != nil {
 			return resp, err
 		}
@@ -648,7 +651,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 						max = 0
 					}
 					if max > 0 {
-						peerCnt, err := o.prepo.CountPeersByUserAndSeedType(ctx, user.Id, "no")
+						peerCnt, err := o.peerpo.CountPeersByUserAndSeedType(ctx, user.Id, "no")
 						if err != nil {
 							return resp, err
 						}
@@ -670,7 +673,9 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 
 		if flag { //redisLock
 			hasBuyCacheKey := strContactWithColon(constant.CACHE_KEY_BOUGHT_USER_PREFIX, strconv.FormatInt(torrent.ID, 10))
-			hasBuy, err := o.cache.HGet(ctx, hasBuyCacheKey, strconv.FormatInt(user.Id, 10))
+
+			// hasBuy //consumeToBuyTorrent
+			_, err := o.cache.HGet(ctx, hasBuyCacheKey, strconv.FormatInt(user.Id, 10))
 			if err != nil {
 				if errors.As(err, redis.Nil) { // 不存在
 
@@ -686,11 +691,14 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		trueUpthis = upthis
 		downthis = Max(0, float64(in.Downloaded)-float64(selfPeer.Downloaded))
 		trueDownthis = downthis
-		var isCheater bool
+		var isCheater bool //todo
+		o.log.Warn(isCheater)
+
 		var seedTime int64
 		var leechTime int64 // TODO: where can find
 
 		var announcetime int64
+		o.log.Warn(announcetime)
 		if selfPeer.Seeder == "yes" {
 			announcetime = selfPeer.Announcetime + seedTime
 		} else {
@@ -712,20 +720,37 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 				return
 			}
 
-			//TODO checkCheatre
+			//TODO checkCheater
+			var isCheater bool
 			//cheaterdet_security
+
+			//snatchInfo
+			snatchInfo, err = o.snatch.GetSnatched(ctx, torrent.ID, user.Id)
+			if err != nil {
+				return
+			}
+			if !isCheater && (trueUpthis > 0 || trueDownthis > 0) {
+				//todo getDataTraffic
+				o.log.Info(snatchInfo)
+			}
+
 		}
 
 	}
 
 	// set non-type event
+	var hasChangeSeederLeecher bool
+	o.log.Warn(hasChangeSeederLeecher)
 	var event string
 	if selfPeer.ID != 0 && in.Event == "stopped" {
-		err := o.prepo.Delete(ctx, selfPeer.ID)
+		affect, err := o.peerpo.Delete(ctx, selfPeer.ID)
 		if err != nil {
 			o.log.Error(err)
 		} else { // todo updateSnatched
+			if affect != 0 && snatchInfo != nil && snatchInfo.ID != 0 {
+				hasChangeSeederLeecher = true
 
+			}
 		}
 
 	} else if selfPeer.ID != 0 {

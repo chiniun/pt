@@ -7,7 +7,7 @@ server:
     timeout: 1s
 data:
   mysql:
-    dsn: root:qqqq@tcp(localhost:3306)/nexusphp?loc=Local&parseTime=true&charset=utf8mb4
+    dsn: root:qqqq@tcp(localhost:3306)/tset_hdkyl_in?loc=Local&parseTime=true&charset=utf8mb4
     debug: true
   redis:
     addr: localhost:6379

@@ -95,7 +95,7 @@ func (c *TrackerHTTPClientImpl) Announce(ctx context.Context, in *AnnounceReques
 	if err != nil {
 		return nil, err
 	}
-	return &out, err
+	return &out, nil
 }
 
 func (c *TrackerHTTPClientImpl) Scrape(ctx context.Context, in *ScrapeRequest, opts ...http.CallOption) (*ScrapeReply, error) {
@@ -108,5 +108,5 @@ func (c *TrackerHTTPClientImpl) Scrape(ctx context.Context, in *ScrapeRequest, o
 	if err != nil {
 		return nil, err
 	}
-	return &out, err
+	return &out, nil
 }

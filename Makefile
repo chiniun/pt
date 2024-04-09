@@ -65,7 +65,7 @@ all:
 
 .PHONY: local
 local:
-	go run ./cmd/*/ -conf configs/config.yaml
+	go run ./cmd/*/ -conf configs/config_test.yaml
 
 
 

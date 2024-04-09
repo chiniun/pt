@@ -16,7 +16,7 @@ type TrackerService struct {
 	log *log.Helper
 }
 
-// NewTrackerService new a Auth service.
+// NewTrackerService
 func NewTrackerService(
 	auc *biz.TrackerAnnounceUsecase,
 	suc *biz.TrackerScrapeUsecase,
@@ -33,8 +33,8 @@ func (s *TrackerService) AppendToServer(srv *http.Server) {
 	router := srv.Route("/pt/")
 
 	// 授权
-	router.GET("/announce", s.Announce) // 步骤1中台首次安装url,后端验证完跳至前端authoration界面,用户填完domain后请求步骤2接口
-	router.GET("/scrape", s.Scrape)     // 步骤5, 中台confirm后回调应用的接口,应用获取中台信息
+	router.GET("/announce", s.Announce)
+	router.GET("/scrape", s.Scrape)
 
 }
 

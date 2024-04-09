@@ -18,10 +18,12 @@ var ProviderSet = wire.NewSet(
 	NewUser,
 	NewCache,
 	NewTorrent,
+	NewPeer,
 	wire.Bind(new(inter.TrackerScrapeRepo), new(*User)),
 	wire.Bind(new(inter.UserRepo), new(*User)),
 	wire.Bind(new(inter.CacheRepo), new(*Cache)),
 	wire.Bind(new(inter.TorrentRepo), new(*Torrent)),
+	wire.Bind(new(inter.PeerRepo), new(*Peer)),
 )
 
 // Data .

@@ -75,5 +75,5 @@ func (c *GreeterHTTPClientImpl) SayHello(ctx context.Context, in *HelloRequest, 
 	if err != nil {
 		return nil, err
 	}
-	return &out, err
+	return &out, nil
 }

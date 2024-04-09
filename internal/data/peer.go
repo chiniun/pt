@@ -85,10 +85,14 @@ func (o *Peer) CountPeersByUserAndSeedType(ctx context.Context, uid int64, seede
 	return cnt, nil
 }
 
-func (o *Peer) Delete(ctx context.Context, id int64) error {
-	err := o.data.DB.Model(new(model.Peer)).Where("id = ?", id).Delete(new(model.Peer)).Error
-	if err != nil {
-		return errors.Wrap(err, "Delete")
+func (o *Peer) Delete(ctx context.Context, id int64) (int64, error) {
+	result := o.data.DB.Model(new(model.Peer)).Where("id = ?", id).Delete(new(model.Peer))
+	if result.Error != nil {
+		return 0, errors.Wrap(result.Error, "Delete")
 	}
-	return nil
+	return result.RowsAffected, nil
+}
+
+func (o *Peer) xx() {
+
 }
