@@ -96,7 +96,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/pt.v1.ScrapeReply'
-    /pt/{name}:
+    /sayhello/{name}:
         get:
             tags:
                 - Greeter
