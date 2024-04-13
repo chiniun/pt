@@ -12,4 +12,6 @@ type PeerRepo interface {
 	GetPeerListByUser(ctx context.Context, tid, uid int64) ([]*model.Peer, error)
 	CountPeersByUserAndSeedType(ctx context.Context, uid int64, seederType string) (int64, error)
 	Delete(ctx context.Context, id int64) (int64, error)
+	Update(ctx context.Context, id int64, updateMap map[string]interface{}) (*model.Peer, error)
+	Insert(ctx context.Context, peer *model.Peer) error
 }

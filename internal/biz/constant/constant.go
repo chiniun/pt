@@ -42,3 +42,8 @@ const (
 	AnnounceInterThreeAge AnnounceIntervalType = 30
 	AnnounceInterThree    AnnounceIntervalType = 3600
 )
+
+const (
+	Setting_PaidTorrentEnabled   bool = true
+	Setting_IsSeedBoxRuleEnabled      = true
+)

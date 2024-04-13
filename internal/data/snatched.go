@@ -9,6 +9,7 @@ import (
 	//"github.com/go-kratos/kratos/v2/errors"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/pkg/errors"
+	"gorm.io/gorm"
 )
 
 type Snatched struct {
@@ -31,8 +32,9 @@ func (o *Snatched) GetSnatched(ctx context.Context, tid, uid int64) (*model.Snat
 	if err != nil {
 		return nil, errors.Wrap(err, "GetSnatchedList")
 	}
+
 	if len(Snatcheds) != 1 {
-		return nil, errors.New("wrong snatcheds data")
+		return nil, errors.New(gorm.ErrRecordNotFound.Error())
 	}
 
 	return Snatcheds[0], nil
@@ -51,4 +53,14 @@ func (o *Snatched) UpdateSnatchedInfo(ctx context.Context, snatchid, upload, dow
 	}
 
 	return nil
+}
+
+func (o *Snatched) Insert(ctx context.Context, snatch *model.Snatched) error {
+
+	return o.data.DB.Model(&model.Snatched{}).Create(snatch).Error
+}
+
+func (o *Snatched) UpdateWithMap(ctx context.Context, id int64, infoMap map[string]interface{}) error {
+
+	return o.data.DB.Model(&model.Snatched{}).Where("id = ?", id).UpdateColumns(infoMap).Error
 }

@@ -6,9 +6,9 @@ import (
 	"pt/internal/biz/model"
 	"time"
 
-	//"github.com/go-kratos/kratos/v2/errors"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/pkg/errors"
+	"gorm.io/gorm"
 )
 
 type Peer struct {
@@ -93,6 +93,25 @@ func (o *Peer) Delete(ctx context.Context, id int64) (int64, error) {
 	return result.RowsAffected, nil
 }
 
-func (o *Peer) xx() {
+func (o *Peer) Update(ctx context.Context, id int64, updateMap map[string]interface{}) (*model.Peer, error) {
+	// $updateset[] = "times_completed = times_completed + 1";
+	updateMap["time_completed"] = gorm.Expr("time_completed + ?", 1)
 
+	err := o.data.DB.Model(new(model.Peer)).Where("id = ?", id).UpdateColumns(updateMap).Error
+
+	if err != nil {
+		return nil, errors.Wrap(err, "Update")
+	}
+
+	return nil, nil
+
+}
+
+func (o *Peer) Insert(ctx context.Context, peer *model.Peer) error {
+	err := o.data.DB.Model(new(model.Peer)).Create(peer).Error
+	if err != nil {
+		return errors.Wrap(err, "create")
+	}
+
+	return nil
 }

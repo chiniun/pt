@@ -220,7 +220,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			Infohash: infoHash,
 		}
 		lockString := httpBuildQueryString(lockParams)
-		lk := strContactWithColon(constant.CacheKey_IsReAnnounceKey, string(md5.New().Sum([]byte(lockString))))
+		lk := cacheKeyContactWithColon(constant.CacheKey_IsReAnnounceKey, string(md5.New().Sum([]byte(lockString))))
 		success, err := o.cache.Lock(ctx, lk, time.Now().Unix(), 20)
 		if err != nil {
 			return resp, err
@@ -230,7 +230,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		}
 
 		if !isReAnnounce {
-			rcLock := strContactWithColon(constant.CacheKey_ReAnnounceCheckByAuthKey, subAuthkey)
+			rcLock := cacheKeyContactWithColon(constant.CacheKey_ReAnnounceCheckByAuthKey, subAuthkey)
 			success, err = o.cache.Lock(ctx, rcLock, time.Now().Unix(), 60)
 			if err != nil {
 				return resp, err
@@ -240,8 +240,8 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			}
 		}
 
-		aInKey := strContactWithColon(constant.CacheKey_AuthKeyInvalidKey, authkey)
-		res, err := o.cache.Get(ctx, aInKey)
+		authInvalidKey := cacheKeyContactWithColon(constant.CacheKey_AuthKeyInvalidKey, authkey)
+		res, err := o.cache.Get(ctx, authInvalidKey)
 		if err != nil {
 			return resp, err
 		}
@@ -253,7 +253,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 
 		userAuthenticateKey = passkey
 
-		pInkey := strContactWithColon(constant.CacheKey_PasskeyInvalidKey, passkey)
+		pInkey := cacheKeyContactWithColon(constant.CacheKey_PasskeyInvalidKey, passkey)
 		res, err := o.cache.Get(ctx, pInkey)
 		if err != nil {
 			return resp, err
@@ -280,7 +280,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	}
 
 	// 判断种子是否存在
-	exist, err := o.cache.Get(ctx, strContactWithColon(constant.CacheKey_TorrentNotExistsKey, infoHash))
+	exist, err := o.cache.Get(ctx, cacheKeyContactWithColon(constant.CacheKey_TorrentNotExistsKey, infoHash))
 	if err != nil {
 		return
 	}
@@ -305,7 +305,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	//check authkey //todo authKey not exist
 	user, err := o.urepo.GetByAuthkey(ctx, authkey)
 	if err != nil {
-		key := strContactWithColon(constant.CacheKey_AuthKeyInvalidKey, authkey)
+		key := cacheKeyContactWithColon(constant.CacheKey_AuthKeyInvalidKey, authkey)
 		_, errLock := o.cache.Lock(ctx, key, time.Now().Unix(), 24*3600)
 		if errLock != nil {
 			return resp, errLock
@@ -335,10 +335,10 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	// TODO _GET["ipv4"]
 	peerIPV46 := ""
 	if ipv4 != "" {
-		peerIPV46 += fmt.Sprintf(", ipv4 = %s", &ipv4)
+		peerIPV46 += fmt.Sprintf(", ipv4 = %s", ipv4)
 	}
 	if ipv6 != "" {
-		peerIPV46 += fmt.Sprintf(", ipv6 = %s", &ipv6)
+		peerIPV46 += fmt.Sprintf(", ipv6 = %s", ipv6)
 	}
 
 	if portBlacklisted(in.Port) {
@@ -365,7 +365,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		user, err = o.urepo.GetByPasskey(ctx, passkey)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				o.cache.Lock(ctx, strContactWithColon(constant.CacheKey_PasskeyInvalidKey, passkey), time.Now().Unix(), 24*3600)
+				o.cache.Lock(ctx, cacheKeyContactWithColon(constant.CacheKey_PasskeyInvalidKey, passkey), time.Now().Unix(), 24*3600)
 				return resp, errors.New("Invalid passkey! Re-download the .torrent")
 			}
 			return resp, err
@@ -408,7 +408,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			infoHashUrlEncode := queryString[start:end] //TODO 这里为什么用encode,缓存会Miss
 			o.log.Errorf("[TORRENT NOT EXISTS] params: %s, infoHashUrlEncode: %s\n", queryString, infoHashUrlEncode)
 			o.cache.Set(ctx,
-				strContactWithColon(constant.CacheKey_TorrentNotExistsKey, infoHashUrlEncode),
+				cacheKeyContactWithColon(constant.CacheKey_TorrentNotExistsKey, infoHashUrlEncode),
 				time.Now().Format(time.RFC3339), 24*3600)
 
 			return resp, errors.Wrap(err, "torrent not registered with this tracker")
@@ -427,9 +427,9 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 
 	if authKeyTid != "" && authKeyTid != strconv.FormatInt(int64(torrent.ID), 10) {
 		err = errors.New("Invalid authkey")
-		_, errT := o.cache.Lock(ctx, strContactWithColon(constant.CacheKey_AuthKeyInvalidKey, authkey), time.Now().Unix(), 24*3600)
+		_, errT := o.cache.Lock(ctx, cacheKeyContactWithColon(constant.CacheKey_AuthKeyInvalidKey, authkey), time.Now().Unix(), 24*3600)
 		if errT != nil {
-			o.log.Errorw("strContactWithColon")
+			o.log.Errorw("cacheKeyContactWithColon")
 		}
 		return
 	}
@@ -564,17 +564,18 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		return resp, errors.New(fmt.Sprintf("There is a minimum announce time: %d wait", announceWait))
 	}
 
-	var isSeedBoxRuleEnabled bool //TODO 配置文件里拿
-	var isIPSeedBox bool          // TODO 盒子判断
+	var isIPSeedBox int8 // TODO 盒子判断
 
-	if isSeedBoxRuleEnabled {
+	if constant.Setting_IsSeedBoxRuleEnabled {
 		if ipv4 != "" {
-			isIPSeedBox = false
+			isIPSeedBox = 0
 		}
 	}
-	o.log.Infow("isIPSeedBox", isIPSeedBox)
+	o.log.Warn("isIPSeedBox", isIPSeedBox)
 
 	var snatchInfo *model.Snatched
+	var upthis, trueUpthis, downthis, trueDownthis int64
+	var announcetime int64
 
 	if selfPeer.ID == 0 {
 		sameIPRecord, err := o.peerpo.GetPeer(ctx, torrent.ID, user.Id, ip)
@@ -664,15 +665,14 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		}
 
 		//buy torrent
-		var ConfigPaidTorrentEnabled bool
 		var flag = seeder == "no" &&
 			user.SeedBonus != 0 &&
 			torrent.Price > 0 &&
 			torrent.Owner != user.Id &&
-			ConfigPaidTorrentEnabled
+			constant.Setting_PaidTorrentEnabled
 
 		if flag { //redisLock
-			hasBuyCacheKey := strContactWithColon(constant.CACHE_KEY_BOUGHT_USER_PREFIX, strconv.FormatInt(torrent.ID, 10))
+			hasBuyCacheKey := cacheKeyContactWithColon(constant.CACHE_KEY_BOUGHT_USER_PREFIX, strconv.FormatInt(torrent.ID, 10))
 
 			// hasBuy //consumeToBuyTorrent
 			_, err := o.cache.HGet(ctx, hasBuyCacheKey, strconv.FormatInt(user.Id, 10))
@@ -686,10 +686,9 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		}
 	} else { // continue an existing session
 
-		var upthis, trueUpthis, downthis, trueDownthis float64
-		upthis = Max(0, float64(in.Uploaded-uint(selfPeer.Uploaded)))
+		upthis = Max(0, int64(in.Uploaded-uint(selfPeer.Uploaded)))
 		trueUpthis = upthis
-		downthis = Max(0, float64(in.Downloaded)-float64(selfPeer.Downloaded))
+		downthis = Max(0, int64(in.Downloaded-uint(selfPeer.Downloaded)))
 		trueDownthis = downthis
 		var isCheater bool //todo
 		o.log.Warn(isCheater)
@@ -697,7 +696,6 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		var seedTime int64
 		var leechTime int64 // TODO: where can find
 
-		var announcetime int64
 		o.log.Warn(announcetime)
 		if selfPeer.Seeder == "yes" {
 			announcetime = selfPeer.Announcetime + seedTime
@@ -705,10 +703,8 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			announcetime = selfPeer.Announcetime + leechTime
 		}
 
-		if selfPeer.Announcetime > 0 &&
-			isSeedBoxRuleEnabled &&
-			!(user.Class >= constant.UC_VIP || isDonor) &&
-			isIPSeedBox {
+		if selfPeer.Announcetime > 0 && constant.Setting_IsSeedBoxRuleEnabled &&
+			!(user.Class >= constant.UC_VIP || isDonor) && isIPSeedBox == 1 {
 
 			// 获取速率设置项
 			var notSeedBoxMaxSpeedMbps = 10 //TODO 获取速率设置项
@@ -749,21 +745,125 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		} else { // todo updateSnatched
 			if affect != 0 && snatchInfo != nil && snatchInfo.ID != 0 {
 				hasChangeSeederLeecher = true
-
+				err = o.snatch.UpdateSnatchedInfo(ctx, snatchInfo.ID, snatchInfo.Uploaded+trueUpthis, snatchInfo.Downloaded+trueDownthis, int64(in.Left))
+				if err != nil {
+					o.log.Errorw("err", err)
+				}
 			}
 		}
 
 	} else if selfPeer.ID != 0 {
 
+		if in.Event == "completed" {
+			updateMap := make(map[string]interface{})
+			updateMap["ip"] = in.IP
+			updateMap["port"] = in.Port
+			updateMap["uploaded"] = in.Uploaded
+			updateMap["downloaded"] = in.Downloaded
+			updateMap["to_go"] = in.Left
+			updateMap["prev_action"] = selfPeer.LastAction
+			updateMap["last_action"] = time.Now().Format(time.DateOnly) //dt
+			updateMap["seeder"] = seeder
+			updateMap["agent"] = selfPeer.Agent
+			updateMap["is_seed_box"] = isIPSeedBox
+			updateMap["finished"] = "yes"
+			updateMap["finishedat"] = time.Now().Unix()
+			updateMap["completedat"] = time.Now().Format(time.DateOnly)
+			_, err := o.peerpo.Update(ctx, selfPeer.ID, updateMap)
+			if err != nil {
+				o.log.Error("peerpo", err) //todo
+			}
+			if err == nil {
+				if seeder != selfPeer.Seeder {
+					//  $updateset[] = ($seeder == "yes" ? "seeders = seeders + 1, leechers = leechers - 1" : "seeders = seeders - 1, leechers = leechers + 1");
+					hasChangeSeederLeecher = true
+				}
+				if snatchInfo != nil || snatchInfo.ID != 0 {
+					err := o.snatch.UpdateSnatchedInfo(ctx, snatchInfo.ID, trueUpthis, trueDownthis, int64(in.Left))
+					if err != nil {
+						o.log.Error("UpdateSnatchedInfo", err) //todo
+
+					}
+					//do_action('snatched_saved', $torrent, $snatchInfo); //todo
+				}
+			}
+		}
+
 	} else {
+
+		if in.Event != "stopped" {
+
+			//todo connectable 判断 ==
+			var connectable = "false"
+
+			// 插入peer
+			newPeer := &model.Peer{
+				Torrent:     torrent.ID,
+				PeerID:      in.PeerID, //todo 验证
+				IP:          ip,
+				Port:        int64(in.Port),
+				Uploaded:    int64(in.Uploaded),
+				Downloaded:  int64(in.Downloaded),
+				ToGo:        int64(in.Left),
+				Seeder:      seeder,
+				LastAction:  time.Now(),
+				PrevAction:  time.Now(),
+				Connectable: connectable,
+				UserID:      user.Id,
+				Agent:       "", //todo 获取agent
+				Passkey:     passkey,
+				IPv4:        ipv4,
+				IPv6:        ipv6,
+				IsSeedBox:   isIPSeedBox,
+			}
+
+			err = o.peerpo.Insert(ctx, newPeer)
+			if err != nil {
+				return resp, err
+			}
+
+			hasChangeSeederLeecher = true
+			//$checkSnatchedRes = mysql_fetch_assoc(sql_query("SELECT id FROM snatched WHERE torrentid = $torrentid AND userid = $userid limit 1"));
+			snatchInfo, err := o.snatch.GetSnatched(ctx, torrent.ID, user.Id)
+			if err != nil {
+				if !errors.As(err, gorm.ErrRecordNotFound) {
+					return resp, err
+				}
+			}
+
+			// 插入
+			if snatchInfo == nil || snatchInfo.ID == 0 {
+				err = o.snatch.Insert(ctx, &model.Snatched{
+					Torrentid:  torrent.ID,
+					UserID:     user.Id,
+					IP:         ip,
+					Port:       in.Port,
+					Uploaded:   int64(in.Uploaded),
+					Downloaded: int64(in.Downloaded),
+					ToGo:       int64(in.Left),
+					LastAction: time.Now(),
+					StartAt:    time.Now(),
+				})
+				if err != nil {
+					return resp, err
+				}
+			} else {
+				//更新
+				snatchMap := make(map[string]interface{}, 0)
+				snatchMap["to_go"] = in.Left
+				snatchMap["last_action"] = time.Now()
+				err = o.snatch.UpdateWithMap(ctx, snatchInfo.ID, snatchMap)
+				if err != nil {
+					return resp, err
+				}
+			}
+
+		}
 
 	}
 
 	//handle hr
-	if in.Left > 0 || event == "completed" &&
-		user.Class < constant.UC_VIP &&
-		!isDonor &&
-		len(torrent.CategoryMode) != 0 {
+	if in.Left > 0 || event == "completed" && user.Class < constant.UC_VIP && !isDonor && len(torrent.CategoryMode) != 0 {
 
 		var ConfHrMod string
 		if ConfHrMod == constant.HR_MODE_GLOBAL ||
@@ -773,6 +873,8 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 
 	}
 
+	// update torrentInfo
+
 	// VIP do not calculate downloaded
 	if user.Class == constant.UC_VIP {
 
@@ -781,7 +883,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	return
 }
 
-func Max(a, b float64) float64 {
+func Max(a, b int64) int64 {
 	if a > b {
 		return a
 	}
@@ -824,7 +926,7 @@ func portBlacklisted(port uint16) bool {
 	return false
 }
 
-func strContactWithColon(key, body string) string {
+func cacheKeyContactWithColon(key, body string) string {
 	return fmt.Sprintf("%s:%s", key, body)
 }
 
@@ -869,8 +971,8 @@ func isDono(u *model.User) bool {
 	return false
 }
 
-func calculateUpSpeedMbps(trueupthis float64, announcetime int64) float64 {
-	upSpeedMbps := ((trueupthis / float64(announcetime)) / 1024 / 1024) * 8
+func calculateUpSpeedMbps(trueupthis int64, announcetime int64) float64 {
+	upSpeedMbps := ((float64(trueupthis) / float64(announcetime)) / 1024 / 1024) * 8
 	upSpeedMbps = math.Round(upSpeedMbps*100) / 100 // 保留两位小数
 	return upSpeedMbps
 }
