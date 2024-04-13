@@ -4,8 +4,9 @@ import (
 	"context"
 	"pt/internal/biz/model"
 
-	"github.com/go-kratos/kratos/v2/errors"
+	//"github.com/go-kratos/kratos/v2/errors"
 	"github.com/go-kratos/kratos/v2/log"
+	"github.com/pkg/errors"
 )
 
 type User struct {
@@ -25,6 +26,14 @@ func (o *User) Create(ctx context.Context, user *model.User) error {
 
 }
 
+func (o *User) Update(ctx context.Context, user *model.User) error {
+	err := o.data.DB.WithContext(ctx).Updates(user).Error
+	if err != nil {
+		return errors.Wrap(err, "update")
+	}
+	return nil
+}
+
 func (o *User) UpdateDemo(ctx context.Context, user *model.User) error {
 	return o.data.DB.Model(&model.User{}).WithContext(ctx).
 		Where("id = ?", user.Id).
@@ -38,7 +47,7 @@ func (o *User) GetByPasskey(ctx context.Context, passkey string) (*model.User, e
 	var user model.User
 	err := o.data.DB.WithContext(ctx).Model(&model.User{}).Where("passkey = ?", passkey).First(&user).Error
 	if err != nil {
-		return nil, errors.New(500, "dbErr", err.Error())
+		return nil, errors.Wrap(err, "GetByPasskey")
 	}
 	return &user, err
 }
@@ -47,7 +56,7 @@ func (o *User) GetByAuthkey(ctx context.Context, key string) (*model.User, error
 	var user model.User
 	err := o.data.DB.WithContext(ctx).Model(&model.User{}).Where("authkey = ?", key).First(&user).Error
 	if err != nil {
-		return nil, errors.New(500, "dbErr", err.Error())
+		return nil, errors.Wrap(err, "GetByAuthkey")
 	}
 	return &user, err
 }

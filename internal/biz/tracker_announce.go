@@ -898,11 +898,24 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		}
 	}
 
-	// 更新用户上传下载信息 USERUPDATESET
+	//TODO更新用户上传下载信息
 	// VIP do not calculate downloaded
 	if user.Class == constant.UC_VIP {
 
 	}
+
+	// 详细数据见 nexsusPHP中USERUPDATESET
+	//realUploaded,
+	//uploaded_increment := 0
+	//uploadedIncrementForUser,
+	uploaded_increment_for_user := 0
+	//realDownloaded,
+	//downloaded_increment := 0
+	//downloadedIncrementForUser,
+	downloaded_increment_for_user := 0
+	user.Uploaded += int64(uploaded_increment_for_user)
+	user.Downloaded += int64(downloaded_increment_for_user)
+	err = o.urepo.Update(ctx, user)
 
 	return
 }
