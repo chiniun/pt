@@ -7,6 +7,7 @@ import (
 	//"github.com/go-kratos/kratos/v2/errors"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/pkg/errors"
+	"gorm.io/gorm"
 )
 
 type Torrent struct {
@@ -44,10 +45,22 @@ func (o *Torrent) FindByHash(ctx context.Context, infoHash string) (views *model
 	   	WHERE 
 	   		info_hash = ?
 	   `
-	err = o.data.DB.Raw(sql, infoHash).Scan(&views).Error
+	err = o.data.DB.Model(new(model.Torrent)).Raw(sql, infoHash).Scan(&views).Error
 	if err != nil {
 		return nil, errors.Wrap(err, "FindByHash")
 	}
 
 	return
+}
+
+func (o *Torrent) UpdateByMap(ctx context.Context, id int64, info map[string]interface{}) error {
+
+	// $updateset[] = "times_completed = times_completed + 1";
+	info["time_completed"] = gorm.Expr("time_completed + ?", info["times_completed_flag"])
+	err := o.data.DB.Model(new(model.Torrent)).Where("id = ?", id).UpdateColumns(info).Error
+	if err != nil {
+		return errors.Wrap(err, "UpdateByMap")
+	}
+
+	return nil
 }

@@ -47,3 +47,10 @@ const (
 	Setting_PaidTorrentEnabled   bool = true
 	Setting_IsSeedBoxRuleEnabled      = true
 )
+
+type TrackerState int8
+
+const (
+	Seeder TrackerState = iota + 1
+	Leecher
+)

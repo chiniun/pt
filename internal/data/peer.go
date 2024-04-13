@@ -3,12 +3,12 @@ package data
 import (
 	"context"
 	"fmt"
+	"pt/internal/biz/constant"
 	"pt/internal/biz/model"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/pkg/errors"
-	"gorm.io/gorm"
 )
 
 type Peer struct {
@@ -94,8 +94,7 @@ func (o *Peer) Delete(ctx context.Context, id int64) (int64, error) {
 }
 
 func (o *Peer) Update(ctx context.Context, id int64, updateMap map[string]interface{}) (*model.Peer, error) {
-	// $updateset[] = "times_completed = times_completed + 1";
-	updateMap["time_completed"] = gorm.Expr("time_completed + ?", 1)
+	
 
 	err := o.data.DB.Model(new(model.Peer)).Where("id = ?", id).UpdateColumns(updateMap).Error
 
@@ -114,4 +113,21 @@ func (o *Peer) Insert(ctx context.Context, peer *model.Peer) error {
 	}
 
 	return nil
+}
+
+func (o *Peer) GetCountByTrackerState(ctx context.Context, tid int64, state constant.TrackerState) (int64, error) {
+	db := o.data.DB.Model(new(model.Peer)).Where("torrent_id = ?", tid)
+
+	var cnt int64
+	switch state {
+	case constant.Leecher:
+		db = db.Where("to_go > 0").Count(&cnt)
+	case constant.Seeder:
+		db = db.Where("to_go == 0").Count(&cnt)
+	}
+
+	if db.Error != nil {
+		return 0, errors.Wrap(db.Error, "GetCountByTrackState")
+	}
+	return cnt, nil
 }

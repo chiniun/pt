@@ -728,6 +728,9 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			if !isCheater && (trueUpthis > 0 || trueDownthis > 0) {
 				//todo getDataTraffic
 				o.log.Info(snatchInfo)
+				// $dataTraffic = getDataTraffic($torrent, $_GET, $az, $self, $snatchInfo, apply_filter('torrent_promotion', $torrent));
+				// $USERUPDATESET[] = "uploaded = uploaded + " . $dataTraffic['uploaded_increment_for_user'];
+				// $USERUPDATESET[] = "downloaded = downloaded + " . $dataTraffic['downloaded_increment_for_user'];
 			}
 
 		}
@@ -736,6 +739,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 
 	// set non-type event
 	var hasChangeSeederLeecher bool
+	var times_completed_flag bool //标识该peer是否已经完成
 	o.log.Warn(hasChangeSeederLeecher)
 	var event string
 	if selfPeer.ID != 0 && in.Event == "stopped" {
@@ -773,12 +777,15 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			if err != nil {
 				o.log.Error("peerpo", err) //todo
 			}
+			times_completed_flag = true //todo 这里原来用的 $updateset[] = "times_completed = times_completed + 1";
+			hasChangeSeederLeecher = true
+
 			if err == nil {
 				if seeder != selfPeer.Seeder {
 					//  $updateset[] = ($seeder == "yes" ? "seeders = seeders + 1, leechers = leechers - 1" : "seeders = seeders - 1, leechers = leechers + 1");
 					hasChangeSeederLeecher = true
 				}
-				if snatchInfo != nil || snatchInfo.ID != 0 {
+				if snatchInfo != nil && snatchInfo.ID != 0 {
 					err := o.snatch.UpdateSnatchedInfo(ctx, snatchInfo.ID, trueUpthis, trueDownthis, int64(in.Left))
 					if err != nil {
 						o.log.Error("UpdateSnatchedInfo", err) //todo
@@ -825,10 +832,8 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			hasChangeSeederLeecher = true
 			//$checkSnatchedRes = mysql_fetch_assoc(sql_query("SELECT id FROM snatched WHERE torrentid = $torrentid AND userid = $userid limit 1"));
 			snatchInfo, err := o.snatch.GetSnatched(ctx, torrent.ID, user.Id)
-			if err != nil {
-				if !errors.As(err, gorm.ErrRecordNotFound) {
-					return resp, err
-				}
+			if err != nil && !errors.As(err, gorm.ErrRecordNotFound) {
+				return resp, err
 			}
 
 			// 插入
@@ -874,7 +879,26 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	}
 
 	// update torrentInfo
+	var (
+		seederCnt, _  = o.peerpo.GetCountByTrackerState(ctx, torrent.ID, constant.Seeder)
+		leecherCnt, _ = o.peerpo.GetCountByTrackerState(ctx, torrent.ID, constant.Leecher)
+	)
+	if hasChangeSeederLeecher {
+		infoMap := make(map[string]interface{})
+		infoMap["seeders"] = seederCnt
+		infoMap["leechers"] = leecherCnt
+		infoMap["variable"] = "yes"
+		infoMap["last_action"] = time.Now()
+		if times_completed_flag {
+			infoMap["times_completed_flag"] = 1
+		}
+		err = o.trepo.UpdateByMap(ctx, torrent.ID, infoMap)
+		if err != nil {
+			o.log.Error("updateByMapErr", err)
+		}
+	}
 
+	// 更新用户上传下载信息 USERUPDATESET
 	// VIP do not calculate downloaded
 	if user.Class == constant.UC_VIP {
 
