@@ -109,7 +109,7 @@ message CodeGeneratorResponse {
 
   // A bitmask of supported features that the code generator supports.
   // This is a bitwise "or" of values from the Feature enum.
-  optional uint64 supported_features = 2;
+  optional int64 supported_features = 2;
 
   // Sync with code_generator.h.
   enum Feature {

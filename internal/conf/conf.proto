@@ -80,8 +80,8 @@ message Mysql {
   bool                     parse_time             = 21;
   bool                     reject_read_only       = 22;
   bool                     allow_native_passwords = 23;
-  uint64                   max_idle_conns         = 30;
-  uint64                   max_open_conns         = 31;
+  int64                   max_idle_conns         = 30;
+  int64                   max_open_conns         = 31;
   google.protobuf.Duration conn_max_lifetime      = 32;
   bool                     debug                  = 33;
   string                   dsn                    = 34;

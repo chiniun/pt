@@ -74,5 +74,5 @@ type TorrentView struct {
 	HR             int64                    `gorm:"column:hr"`
 	ApprovalStatus constant.APPROVAL_STATUS `gorm:"column:approval_status"`
 	Price          float64                  `gorm:"column:price"`
-	CategoryMode   string                   `gorm:"column:mode"`
+	Mode           string                   `gorm:"column:mode"`
 }

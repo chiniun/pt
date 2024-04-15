@@ -63,6 +63,7 @@ type TrackerAnnounceUsecase struct {
 	peerpo inter.PeerRepo
 	cache  inter.CacheRepo
 	snatch inter.SnatchedRepo
+	hitpo  inter.HitRunsRepo
 	log    *log.Helper
 }
 
@@ -868,11 +869,42 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	}
 
 	//handle hr
-	if in.Left > 0 || event == "completed" && user.Class < constant.UC_VIP && !isDonor && len(torrent.CategoryMode) != 0 {
+	if in.Left > 0 || event == "completed" && user.Class < constant.UC_VIP && !isDonor && len(torrent.Mode) != 0 {
 
 		var ConfHrMod string
-		if ConfHrMod == constant.HR_MODE_GLOBAL ||
-			(ConfHrMod == constant.HR_MODE_MANUAL && torrent.HR == constant.HR_TORRENT_YES) {
+		if ConfHrMod == constant.HR_MODE_GLOBAL || (ConfHrMod == constant.HR_MODE_MANUAL && torrent.HR == constant.HR_TORRENT_YES) {
+			hrCacheKey := getCacheKeyHR(user.Id, torrent.ID)
+			hrExists := len(hrCacheKey) == 0 
+			if hrExists {
+
+				includeRate := o.getIncludeRateByTorrentMode(torrent.Mode)
+
+				//get newest snatch info
+				snatchInfo, err := o.snatch.GetSnatched(ctx, torrent.ID, user.Id)
+				if err != nil {
+					o.log.Error("snatchInfo", err)
+					return resp, err
+				}
+
+				requiredDownloaded := torrent.Size * includeRate
+				if snatchInfo.Downloaded >= requiredDownloaded {
+					hr := &model.HitRuns{
+						UID:        user.Id,
+						TorrentID:  torrent.ID,
+						SnatchedID: snatchInfo.ID,
+						Status:     0,
+						Comment:    "",
+						CreatedAt:  time.Now(),
+						UpdatedAt:  time.Now(),
+					}
+
+					err = o.hitpo.Create(ctx, hr)
+					if err != nil {
+						o.log.Error("hitpo.Create", err)
+					}
+				}
+
+			}
 
 		}
 
@@ -925,6 +957,11 @@ func Max(a, b int64) int64 {
 		return a
 	}
 	return b
+}
+
+// todo
+func (o *TrackerAnnounceUsecase) getIncludeRateByTorrentMode(mode string) int64 {
+	return 1
 }
 
 func httpBuildQueryString(params *lockParam) string {
@@ -1012,4 +1049,8 @@ func calculateUpSpeedMbps(trueupthis int64, announcetime int64) float64 {
 	upSpeedMbps := ((float64(trueupthis) / float64(announcetime)) / 1024 / 1024) * 8
 	upSpeedMbps = math.Round(upSpeedMbps*100) / 100 // 保留两位小数
 	return upSpeedMbps
+}
+
+func getCacheKeyHR(userId, torrentId int64) string {
+	return fmt.Sprintf(constant.CacheKey_HR, userId, torrentId)
 }

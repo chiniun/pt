@@ -37,8 +37,8 @@ func NewPOSTGRESQL(cfg IMySQL, logger log.Logger) (db *gorm.DB, err error) {
 
 	var (
 		connMaxLifetime time.Duration
-		maxIdleConns    uint64
-		maxOpenConns    uint64
+		maxIdleConns    int64
+		maxOpenConns    int64
 	)
 	if !cfg.GetConnMaxLifetime().IsValid() {
 		connMaxLifetime = time.Hour

@@ -30,10 +30,10 @@ message AnnounceRequest {
   string peer_id = 2;
   string ip = 3;
   uint32 port = 4;
-  uint64 uploaded =5;
-  uint64 downloaded = 6;
-  uint64 left = 7;
-  uint64 numwant = 8;
+  int64 uploaded =5;
+  int64 downloaded = 6;
+  int64 left = 7;
+  int64 numwant = 8;
   string key =9;
   bool compact = 10;
   bool supportcrypto = 11;

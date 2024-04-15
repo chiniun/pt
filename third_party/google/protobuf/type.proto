@@ -71,7 +71,7 @@ message Field {
     TYPE_FLOAT = 2;
     // Field type int64.
     TYPE_INT64 = 3;
-    // Field type uint64.
+    // Field type int64.
     TYPE_UINT64 = 4;
     // Field type int32.
     TYPE_INT32 = 5;

@@ -9,16 +9,16 @@ type User struct {
 	Secret              string     `json:"secret"`
 	Email               string     `json:"email"`
 	Status              string     `json:"status"`
-	Added               *time.Time  `json:"added"`
-	LastLogin           *time.Time  `json:"last_login"`
-	LastAccess          *time.Time  `json:"last_access"`
-	LastHome            *time.Time  `json:"last_home"`
-	LastOffer           *time.Time  `json:"last_offer"`
-	ForumAccess         *time.Time  `json:"forum_access"`
-	LastStaffMsg        *time.Time  `json:"last_staffmsg"`
-	LastPM              *time.Time  `json:"last_pm"`
-	LastComment         *time.Time  `json:"last_comment"`
-	LastPost            *time.Time  `json:"last_post"`
+	Added               *time.Time `json:"added"`
+	LastLogin           *time.Time `json:"last_login"`
+	LastAccess          *time.Time `json:"last_access"`
+	LastHome            *time.Time `json:"last_home"`
+	LastOffer           *time.Time `json:"last_offer"`
+	ForumAccess         *time.Time `json:"forum_access"`
+	LastStaffMsg        *time.Time `json:"last_staffmsg"`
+	LastPM              *time.Time `json:"last_pm"`
+	LastComment         *time.Time `json:"last_comment"`
+	LastPost            *time.Time `json:"last_post"`
 	LastBrowse          int64      `json:"last_browse"`
 	LastMusic           int64      `json:"last_music"`
 	LastCatchup         int64      `json:"last_catchup"`
@@ -83,14 +83,14 @@ type User struct {
 	InvitedBy           int64      `json:"invited_by"`
 	Gender              string     `json:"gender"`
 	VIPAdded            string     `json:"vip_added"`
-	VIPUntil            *time.Time  `json:"vip_until"`
+	VIPUntil            *time.Time `json:"vip_until"`
 	SeedBonus           float64    `json:"seedbonus"`
 	Charity             float64    `json:"charity"`
 	BonusComment        string     `json:"bonuscomment"`
 	Parked              string     `json:"parked"`
 	LeechWarn           string     `json:"leechwarn"`
-	LeechWarnUntil      *time.Time  `json:"leechwarnuntil"`
-	LastWarned          *time.Time  `json:"lastwarned"`
+	LeechWarnUntil      *time.Time `json:"leechwarnuntil"`
+	LastWarned          *time.Time `json:"lastwarned"`
 	TimesWarned         int64      `json:"timeswarned"`
 	WarnedBy            int64      `json:"warnedby"`
 	SBNum               int64      `json:"sbnum"`
@@ -123,8 +123,8 @@ type User struct {
 	SeedPointsPerHour   float64    `json:"seed_points_per_hour"`
 	AttendanceCard      int64      `json:"attendance_card"`
 	OfferAllowedCount   int64      `json:"offer_allowed_count"`
-	SeedPointsUpdatedAt *time.Time  `json:"seed_points_updated_at"`
-	SeedTimeUpdatedAt   *time.Time  `json:"seed_time_updated_at"`
+	SeedPointsUpdatedAt *time.Time `json:"seed_points_updated_at"`
+	SeedTimeUpdatedAt   *time.Time `json:"seed_time_updated_at"`
 }
 
 func (o *User) TableName() string {

@@ -42,7 +42,7 @@ message FieldRules {
         Int32Rules    int32    = 3;
         Int64Rules    int64    = 4;
         UInt32Rules   uint32   = 5;
-        UInt64Rules   uint64   = 6;
+        UInt64Rules   int64   = 6;
         SInt32Rules   sint32   = 7;
         SInt64Rules   sint64   = 8;
         Fixed32Rules  fixed32  = 9;
@@ -245,36 +245,36 @@ message UInt32Rules {
     optional bool ignore_empty = 8;
 }
 
-// UInt64Rules describes the constraints applied to `uint64` values
+// UInt64Rules describes the constraints applied to `int64` values
 message UInt64Rules {
     // Const specifies that this field must be exactly the specified value
-    optional uint64 const = 1;
+    optional int64 const = 1;
 
     // Lt specifies that this field must be less than the specified value,
     // exclusive
-    optional uint64 lt = 2;
+    optional int64 lt = 2;
 
     // Lte specifies that this field must be less than or equal to the
     // specified value, inclusive
-    optional uint64 lte = 3;
+    optional int64 lte = 3;
 
     // Gt specifies that this field must be greater than the specified value,
     // exclusive. If the value of Gt is larger than a specified Lt or Lte, the
     // range is reversed.
-    optional uint64 gt = 4;
+    optional int64 gt = 4;
 
     // Gte specifies that this field must be greater than or equal to the
     // specified value, inclusive. If the value of Gte is larger than a
     // specified Lt or Lte, the range is reversed.
-    optional uint64 gte = 5;
+    optional int64 gte = 5;
 
     // In specifies that this field must be equal to one of the specified
     // values
-    repeated uint64 in = 6;
+    repeated int64 in = 6;
 
     // NotIn specifies that this field cannot be equal to one of the specified
     // values
-    repeated uint64 not_in = 7;
+    repeated int64 not_in = 7;
 
     // IgnoreEmpty specifies that the validation rules of this field should be
     // evaluated only if the field is not empty
@@ -511,29 +511,29 @@ message StringRules {
     // Len specifies that this field must be the specified number of
     // characters (Unicode code points). Note that the number of
     // characters may differ from the number of bytes in the string.
-    optional uint64 len = 19;
+    optional int64 len = 19;
 
     // MinLen specifies that this field must be the specified number of
     // characters (Unicode code points) at a minimum. Note that the number of
     // characters may differ from the number of bytes in the string.
-    optional uint64 min_len = 2;
+    optional int64 min_len = 2;
 
     // MaxLen specifies that this field must be the specified number of
     // characters (Unicode code points) at a maximum. Note that the number of
     // characters may differ from the number of bytes in the string.
-    optional uint64 max_len = 3;
+    optional int64 max_len = 3;
 
     // LenBytes specifies that this field must be the specified number of bytes
     // at a minimum
-    optional uint64 len_bytes = 20;
+    optional int64 len_bytes = 20;
 
     // MinBytes specifies that this field must be the specified number of bytes
     // at a minimum
-    optional uint64 min_bytes = 4;
+    optional int64 min_bytes = 4;
 
     // MaxBytes specifies that this field must be the specified number of bytes
     // at a maximum
-    optional uint64 max_bytes = 5;
+    optional int64 max_bytes = 5;
 
     // Pattern specifes that this field must match against the specified
     // regular expression (RE2 syntax). The included expression should elide
@@ -637,15 +637,15 @@ message BytesRules {
     optional bytes const = 1;
 
     // Len specifies that this field must be the specified number of bytes
-    optional uint64 len = 13;
+    optional int64 len = 13;
 
     // MinLen specifies that this field must be the specified number of bytes
     // at a minimum
-    optional uint64 min_len = 2;
+    optional int64 min_len = 2;
 
     // MaxLen specifies that this field must be the specified number of bytes
     // at a maximum
-    optional uint64 max_len = 3;
+    optional int64 max_len = 3;
 
     // Pattern specifes that this field must match against the specified
     // regular expression (RE2 syntax). The included expression should elide
@@ -726,11 +726,11 @@ message MessageRules {
 message RepeatedRules {
     // MinItems specifies that this field must have the specified number of
     // items at a minimum
-    optional uint64 min_items = 1;
+    optional int64 min_items = 1;
 
     // MaxItems specifies that this field must have the specified number of
     // items at a maximum
-    optional uint64 max_items = 2;
+    optional int64 max_items = 2;
 
     // Unique specifies that all elements in this field must be unique. This
     // contraint is only applicable to scalar and enum types (messages are not
@@ -751,11 +751,11 @@ message RepeatedRules {
 message MapRules {
     // MinPairs specifies that this field must have the specified number of
     // KVs at a minimum
-    optional uint64 min_pairs = 1;
+    optional int64 min_pairs = 1;
 
     // MaxPairs specifies that this field must have the specified number of
     // KVs at a maximum
-    optional uint64 max_pairs = 2;
+    optional int64 max_pairs = 2;
 
     // NoSparse specifies values in this field cannot be unset. This only
     // applies to map's with message value types.

@@ -10,6 +10,7 @@ import (
 	common "pt/internal/conf"
 
 	_ "pt/internal/utils/types/db"
+
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"gorm.io/driver/mysql"
@@ -41,8 +42,8 @@ type IMySQL interface {
 	GetParseTime() bool
 	GetRejectReadOnly() bool
 	GetAllowNativePasswords() bool
-	GetMaxIdleConns() uint64
-	GetMaxOpenConns() uint64
+	GetMaxIdleConns() int64
+	GetMaxOpenConns() int64
 	GetConnMaxLifetime() *durationpb.Duration
 	GetDebug() bool
 	GetDsn() string
@@ -107,8 +108,8 @@ func NewMySQL(cfg IMySQL, logger kratoslog.Logger) (db *gorm.DB, err error) {
 
 	var (
 		connMaxLifetime time.Duration
-		maxIdleConns    uint64
-		maxOpenConns    uint64
+		maxIdleConns    int64
+		maxOpenConns    int64
 	)
 	if !cfg.GetConnMaxLifetime().IsValid() {
 		connMaxLifetime = time.Hour
