@@ -873,12 +873,24 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 
 		var ConfHrMod string
 		if ConfHrMod == constant.HR_MODE_GLOBAL || (ConfHrMod == constant.HR_MODE_MANUAL && torrent.HR == constant.HR_TORRENT_YES) {
-			hrCacheKey := getCacheKeyHR(user.Id, torrent.ID)
-			hrExists := len(hrCacheKey) == 0 
-			if hrExists {
+			hrCacheKey := getCacheKeyHR(user.Id, torrent.ID) //todo 时间够了需要删除hr状态
+			hrCacheResult, err := o.cache.Get(ctx, hrCacheKey)
+			if err != nil && err != redis.Nil {
+				return resp, err
+			}
+			hrCacheNotExists := len(hrCacheResult) == 0
+			if hrCacheNotExists {
 
+				// 获取mysql
+				_, err := o.hitpo.Get(ctx, torrent.ID, user.Id)
+				if err == nil { // 存入缓存
+					o.cache.Set(ctx, hrCacheKey, "hr", 24*3600*time.Second) // todo set value值是什么?
+				} else if err != nil && errors.As(err, gorm.ErrRecordNotFound) {
+					return resp, err
+				}
+
+				// 需创建
 				includeRate := o.getIncludeRateByTorrentMode(torrent.Mode)
-
 				//get newest snatch info
 				snatchInfo, err := o.snatch.GetSnatched(ctx, torrent.ID, user.Id)
 				if err != nil {
@@ -902,12 +914,10 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 					if err != nil {
 						o.log.Error("hitpo.Create", err)
 					}
+					o.cache.Set(ctx, hrCacheKey, "hr", 24*3600*time.Second)
 				}
-
 			}
-
 		}
-
 	}
 
 	// update torrentInfo

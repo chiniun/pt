@@ -2,6 +2,14 @@ package model
 
 import "time"
 
+// hr状态
+const (
+	STATUS_INSPECTING = 1
+	STATUS_REACHED    = 2
+	STATUS_UNREACHED  = 3
+	STATUS_PARDONED   = 4
+)
+
 type HitRuns struct {
 	ID         int64     `json:"id"`
 	UID        int64     `json:"uid"`

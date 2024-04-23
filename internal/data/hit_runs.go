@@ -28,3 +28,13 @@ func (o *HitRuns) Create(ctx context.Context, hr *model.HitRuns) error {
 	}
 	return nil
 }
+
+func (o *HitRuns) Get(ctx context.Context, tid, uid int64) (*model.HitRuns, error) {
+
+	hr := new(model.HitRuns)
+	err := o.data.DB.WithContext(ctx).Where("torrent_id = ?", tid).Where("user_id", uid).First(hr).Error
+	if err != nil {
+		return nil, errors.Wrap(err, "Create")
+	}
+	return hr, nil
+}
