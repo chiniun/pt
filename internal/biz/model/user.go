@@ -71,7 +71,7 @@ type User struct {
 	UploadPos           string     `json:"uploadpos"`
 	ForumPost           string     `json:"forumpost"`
 	DownloadPos         string     `json:"downloadpos"`
-	ClientSelect        uint8      `json:"clientselect"`
+	ClientSelect        int64      `json:"clientselect"`
 	Signatures          string     `json:"signatures"`
 	Signature           string     `json:"signature"`
 	Lang                uint16     `json:"lang"`

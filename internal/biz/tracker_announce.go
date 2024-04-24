@@ -40,6 +40,8 @@ type AnnounceRequest struct {
 	Passkey  string `json:"passkey,omitempty" bson:"passkey" form:"passkey"`
 	Authkey  string `json:"authkey,omitempty" bson:"authkey" form:"authkey"`
 	RawQuery string `json:"raw_query,omitempty" bson:"raw_query" form:"raw_query"`
+
+	UA string `json:"ua,omitempty" bson:"ua" form:"ua"`
 }
 
 func (req *AnnounceRequest) IsSeeding() bool {
@@ -58,13 +60,14 @@ type AnnounceResponse struct {
 // TrackerAnnounceRepo
 // TrackerUsecase is a Tracker usecase.
 type TrackerAnnounceUsecase struct {
-	urepo  inter.UserRepo
-	trepo  inter.TorrentRepo
-	peerpo inter.PeerRepo
-	cache  inter.CacheRepo
-	snatch inter.SnatchedRepo
-	hitpo  inter.HitRunsRepo
-	log    *log.Helper
+	urepo   inter.UserRepo
+	trepo   inter.TorrentRepo
+	peerpo  inter.PeerRepo
+	cache   inter.CacheRepo
+	snatch  inter.SnatchedRepo
+	hitpo   inter.HitRunsRepo
+	agentpo inter.AgentAllowedRepo
+	log     *log.Helper
 }
 
 // NewTrackerAnnounceUsecase new a Tracker usecase.
@@ -73,12 +76,19 @@ func NewTrackerAnnounceUsecase(
 	cache inter.CacheRepo,
 	peerpo inter.PeerRepo,
 	trepo inter.TorrentRepo,
+	snatch inter.SnatchedRepo,
+	hitpo inter.HitRunsRepo,
+	agentpo inter.AgentAllowedRepo,
 	logger log.Logger) *TrackerAnnounceUsecase {
 	return &TrackerAnnounceUsecase{
-		urepo: urepo,
-		trepo: trepo,
-		cache: cache,
-		log:   log.NewHelper(logger),
+		urepo:   urepo,
+		trepo:   trepo,
+		peerpo:  peerpo,
+		cache:   cache,
+		snatch:  snatch,
+		hitpo:   hitpo,
+		agentpo: agentpo,
+		log:     log.NewHelper(logger),
 	}
 }
 
@@ -95,24 +105,105 @@ type announceParamsChecker struct {
 }
 
 func NewAnnounceParamsChecker() *announceParamsChecker {
-	return &announceParamsChecker{}
+
+	return &announceParamsChecker{
+		AReq: &AnnounceRequest{},
+		Err:  nil,
+	}
 }
 
 func (o *announceParamsChecker) Do(ctx http.Context) (*AnnounceRequest, error) {
 
 	o.CheckUserAgent(ctx)
 	o.Bind(ctx)
-
 	return o.AReq, o.Err
 }
 
 // TODO checkclient
+func (o *TrackerAnnounceUsecase) CheckClient(ctx http.Context, in *AnnounceRequest) error {
+	allows := make([]*model.AgentAllowedFamily, 0)
+
+	allowStr, err := o.cache.Get(ctx, constant.CacheKeyAllowClientKey)
+	if err != nil && err != redis.Nil {
+		return errors.Wrap(err, "Get")
+	}
+
+	if len(allowStr) != 0 {
+		json.Unmarshal([]byte(allowStr), &allows)
+	} else {
+		allows, err = o.agentpo.GetList(ctx)
+		if err != nil {
+			return errors.Wrap(err, "GetList")
+		}
+	}
+
+	var agentAllowPassed *model.AgentAllowedFamily
+	var versionTooLowStr string
+
+	for _, allow := range allows {
+
+		agentAllowId := allow.ID
+		var (
+			isPeerIdAllowed = false
+			isAgentAllowed  = false
+			isPeerIdTooLow  = false
+			isAgentTooLow   = false
+		)
+
+		if allow.PeerIdPattern == "" || in.PeerID == "" {
+			isPeerIdAllowed = true
+		} else {
+
+			// pattern := allow.PeerIdPattern
+			// start := allow.PeerIdStart
+			// matchType := allow.PeerIdMatchType
+			// matchNum := allow.PeerIdMatchNum
+
+			//todo
+			//$peerIdResult = $this->isAllowed($pa
+			var peerIdResult int64
+			if peerIdResult == 1 {
+				isPeerIdAllowed = true
+			}
+			if peerIdResult == 2 {
+				isPeerIdTooLow = true
+			}
+		}
+
+		if isPeerIdAllowed && isAgentAllowed {
+			agentAllowPassed = allow
+			break
+		}
+		if isPeerIdTooLow && isAgentTooLow {
+
+			//versionTooLowStr = "Your " . $agentAllow->family . " 's version is too low, please update it after " . $agentAllow->start_name;
+
+			versionTooLowStr = fmt.Sprintf("Your %s 's version is too low,please update it after %s", allow.Family, allow.StartName)
+			break //todo php代码里面没有
+		}
+
+	}
+
+	if len(versionTooLowStr) != 0 {
+		return errors.New(versionTooLowStr)
+	}
+
+	if agentAllowPassed == nil {
+		return errors.New("Banned Client")
+		//throw new ClientNotAllowedException("Banned Client, Please goto " . getSchemeAndHttpHost() . "/faq.php#id29 for a list of acceptable clients");
+	}
+
+	return nil
+
+}
 func (o *announceParamsChecker) CheckUserAgent(ctx http.Context) {
 	if o.Err != nil {
 		return
 	}
 
+	req := new(AnnounceRequest)
 	ua := ctx.Header().Get("User-Agent")
+	req.UA = ua
 	patterns := []string{
 		"^Mozilla/",
 		"^Opera/",
@@ -124,15 +215,16 @@ func (o *announceParamsChecker) CheckUserAgent(ctx http.Context) {
 		match, err := regexp.MatchString(pattern, ua)
 		if err != nil {
 			o.Err = errors.WithStack(err)
-			return
+			break
 		}
 
 		if match {
 			o.Err = ErrAgentBlock
-			return
+			break
 		}
 	}
 
+	return
 }
 
 func (o *announceParamsChecker) Bind(ctx http.Context) {
@@ -141,27 +233,25 @@ func (o *announceParamsChecker) Bind(ctx http.Context) {
 	}
 
 	query := ctx.Request().URL.RawQuery
-	req := new(AnnounceRequest)
 
-	err := ctx.Bind(req)
+	err := ctx.Bind(o.AReq)
 	if err != nil {
 		o.Err = err
 		return
 	}
-	req.RawQuery = query
-	o.AReq = req
+	o.AReq.RawQuery = query
 
-	if len(req.InfoHash) != 20 {
+	if len(o.AReq.InfoHash) != 20 {
 		o.Err = ErrParamsInvalidInfoHash
 	}
 
-	if req.Passkey != "" && len(req.Passkey) != 32 {
+	if o.AReq.Passkey != "" && len(o.AReq.Passkey) != 32 {
 		o.Err = ErrParmsInvalidPassKey
 		return
 	}
 
-	if req.Authkey != "" {
-		parts := strings.Split(req.Authkey, "|")
+	if o.AReq.Authkey != "" {
+		parts := strings.Split(o.AReq.Authkey, "|")
 		if len(parts) != 3 {
 			o.Err = ErrParamsInvalidAuthKey
 			return
@@ -194,6 +284,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	if err != nil {
 		return
 	}
+	o.CheckClient(ctx, in)
 
 	var (
 		authKeyTid          string
@@ -347,7 +438,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	}
 
 	// return peer list limit
-	rsize := 50 //TODO 暂时强制返回50条
+	rsize := 50 //TODO 暂时强制最多返回50条
 
 	// seeder
 	var seeder = "no"
@@ -769,7 +860,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			updateMap["prev_action"] = selfPeer.LastAction
 			updateMap["last_action"] = time.Now().Format(time.DateOnly) //dt
 			updateMap["seeder"] = seeder
-			updateMap["agent"] = selfPeer.Agent
+			updateMap["agent"] = in.UA
 			updateMap["is_seed_box"] = isIPSeedBox
 			updateMap["finished"] = "yes"
 			updateMap["finishedat"] = time.Now().Unix()
@@ -818,7 +909,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 				PrevAction:  time.Now(),
 				Connectable: connectable,
 				UserID:      user.Id,
-				Agent:       "", //todo 获取agent
+				Agent:       in.UA,
 				Passkey:     passkey,
 				IPv4:        ipv4,
 				IPv6:        ipv6,
@@ -885,37 +976,37 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 				_, err := o.hitpo.Get(ctx, torrent.ID, user.Id)
 				if err == nil { // 存入缓存
 					o.cache.Set(ctx, hrCacheKey, "hr", 24*3600*time.Second) // todo set value值是什么?
-				} else if err != nil && errors.As(err, gorm.ErrRecordNotFound) {
+				} else if !errors.As(err, gorm.ErrRecordNotFound) {
 					return resp, err
-				}
-
-				// 需创建
-				includeRate := o.getIncludeRateByTorrentMode(torrent.Mode)
-				//get newest snatch info
-				snatchInfo, err := o.snatch.GetSnatched(ctx, torrent.ID, user.Id)
-				if err != nil {
-					o.log.Error("snatchInfo", err)
-					return resp, err
-				}
-
-				requiredDownloaded := torrent.Size * includeRate
-				if snatchInfo.Downloaded >= requiredDownloaded {
-					hr := &model.HitRuns{
-						UID:        user.Id,
-						TorrentID:  torrent.ID,
-						SnatchedID: snatchInfo.ID,
-						Status:     0,
-						Comment:    "",
-						CreatedAt:  time.Now(),
-						UpdatedAt:  time.Now(),
-					}
-
-					err = o.hitpo.Create(ctx, hr)
+				} else {
+					// 需创建
+					includeRate := o.getIncludeRateByTorrentMode(torrent.Mode)
+					// get newest snatch info
+					snatchInfo, err := o.snatch.GetSnatched(ctx, torrent.ID, user.Id)
 					if err != nil {
-						o.log.Error("hitpo.Create", err)
+						o.log.Error("snatchInfo", err)
+						return resp, err
 					}
-					o.cache.Set(ctx, hrCacheKey, "hr", 24*3600*time.Second)
+					requiredDownloaded := torrent.Size * includeRate
+					if snatchInfo.Downloaded >= requiredDownloaded {
+						hr := &model.HitRuns{
+							UID:        user.Id,
+							TorrentID:  torrent.ID,
+							SnatchedID: snatchInfo.ID,
+							Status:     0,
+							Comment:    "",
+							CreatedAt:  time.Now(),
+							UpdatedAt:  time.Now(),
+						}
+
+						err = o.hitpo.Create(ctx, hr)
+						if err != nil {
+							o.log.Error("hitpo.Create", err)
+						}
+						o.cache.Set(ctx, hrCacheKey, "hr", 24*3600*time.Second)
+					}
 				}
+
 			}
 		}
 	}
@@ -940,6 +1031,13 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		}
 	}
 
+	// clientFamilyId
+	var clientFamilyId int64
+	var clientSelect int64
+	if clientFamilyId != 0 && clientFamilyId != user.ClientSelect {
+		clientSelect = clientFamilyId
+	}
+
 	//TODO更新用户上传下载信息
 	// VIP do not calculate downloaded
 	if user.Class == constant.UC_VIP {
@@ -957,6 +1055,9 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	downloaded_increment_for_user := 0
 	user.Uploaded += int64(uploaded_increment_for_user)
 	user.Downloaded += int64(downloaded_increment_for_user)
+	if clientSelect != 0 {
+		user.ClientSelect = clientSelect
+	}
 	err = o.urepo.Update(ctx, user)
 
 	return

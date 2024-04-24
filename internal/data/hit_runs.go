@@ -2,7 +2,6 @@ package data
 
 import (
 	"context"
-	"pt/internal/biz/inter"
 	"pt/internal/biz/model"
 
 	"github.com/go-kratos/kratos/v2/log"
@@ -14,7 +13,7 @@ type HitRuns struct {
 	log  *log.Helper
 }
 
-func NewHitRuns(data *Data, logger log.Logger) inter.HitRunsRepo {
+func NewHitRuns(data *Data, logger log.Logger) *HitRuns {
 	return &HitRuns{
 		data: data,
 		log:  log.NewHelper(logger),

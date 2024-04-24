@@ -16,4 +16,7 @@ const (
 	CacheKey_TorrentHashkeyContent = "torrent_hash_%s_content"
 
 	CacheKey_HR = "hit_and_run:%d:%d" // {userId}{torrentId}
+
+	// agentAllowed
+	CacheKeyAllowClientKey = "all_agent_allows:php"
 )
