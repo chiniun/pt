@@ -19,3 +19,8 @@ const (
 	UC_SYSOP
 	UC_STAFFLEADER
 )
+
+const (
+	// 小于此等级用户需校验是否作弊
+	NoDetectSecurityUserClass = UC_VIP
+)

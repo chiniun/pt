@@ -54,3 +54,16 @@ const (
 	Seeder TrackerState = iota + 1
 	Leecher
 )
+
+const (
+	//欺骗校验
+	CheateredSecurity = 2 //cheaterdet_security
+
+	MaximumUploadSpeed     = 8000
+	NotSeedBoxMaxSpeedMbps = 100
+
+	TrafficCntPerG = 1073741824
+	TrafficCnt10MB = 10485760
+	TrafficCntPerMB = 1048576
+
+)

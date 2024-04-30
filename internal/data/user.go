@@ -34,6 +34,11 @@ func (o *User) Update(ctx context.Context, user *model.User) error {
 	return nil
 }
 
+func (o *User) Get(ctx context.Context, id int64) (*model.User, error) {
+	user := new(model.User)
+	return user, o.data.DB.WithContext(ctx).Where("id = ?", id).Find(user).Error
+}
+
 func (o *User) UpdateDemo(ctx context.Context, user *model.User) error {
 	return o.data.DB.Model(&model.User{}).WithContext(ctx).
 		Where("id = ?", user.Id).

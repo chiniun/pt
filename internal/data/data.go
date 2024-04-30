@@ -23,6 +23,7 @@ var ProviderSet = wire.NewSet(
 	NewAgentDeny,
 	NewHitRuns,
 	NewSnatched,
+	NewCheaters,
 	wire.Bind(new(inter.TrackerScrapeRepo), new(*User)),
 	wire.Bind(new(inter.UserRepo), new(*User)),
 	wire.Bind(new(inter.CacheRepo), new(*Cache)),
@@ -32,6 +33,7 @@ var ProviderSet = wire.NewSet(
 	wire.Bind(new(inter.AgentDenyRepo), new(*AgentDeny)),
 	wire.Bind(new(inter.HitRunsRepo), new(*HitRuns)),
 	wire.Bind(new(inter.SnatchedRepo), new(*Snatched)),
+	wire.Bind(new(inter.CheaterRepo), new(*Cheaters)),
 )
 
 // Data .

@@ -1,6 +1,7 @@
 package biz
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/json"
@@ -68,6 +69,7 @@ type TrackerAnnounceUsecase struct {
 	hitpo       inter.HitRunsRepo
 	agentpo     inter.AgentAllowedRepo
 	agentDenyPo inter.AgentDenyRepo
+	cheaterRepo inter.CheaterRepo
 	log         *log.Helper
 }
 
@@ -81,6 +83,7 @@ func NewTrackerAnnounceUsecase(
 	hitpo inter.HitRunsRepo,
 	agentpo inter.AgentAllowedRepo,
 	agentDenyPo inter.AgentDenyRepo,
+	cheaterRepo inter.CheaterRepo,
 	logger log.Logger) *TrackerAnnounceUsecase {
 	return &TrackerAnnounceUsecase{
 		urepo:       urepo,
@@ -91,6 +94,7 @@ func NewTrackerAnnounceUsecase(
 		hitpo:       hitpo,
 		agentpo:     agentpo,
 		agentDenyPo: agentDenyPo,
+		cheaterRepo: cheaterRepo,
 		log:         log.NewHelper(logger),
 	}
 }
@@ -197,7 +201,8 @@ func (o *TrackerAnnounceUsecase) CheckClient(ctx http.Context, in *AnnounceReque
 	}
 
 	if agentAllowPassed.Exception == "Yes" {
-		// check if exclude // checkIsDenied($peerId, $agent, $familyId)
+		// check if exclude
+		// checkIsDenied($peerId, $agent, $familyId)
 		allowDenys := make([]*model.AgentAllowedException, 0)
 
 		allowStr, err := o.cache.Get(ctx, constant.CacheKeyAgentDenyKey)
@@ -248,7 +253,7 @@ func (o *TrackerAnnounceUsecase) getPatternMatches(pattern, start string, matchN
 	}
 
 	matchCount := len(matches) - 1
-	if matchNum > int64(matchCount) {
+	if matchNum > int64(matchCount) { // note: php 代码就这样
 		// Remove this check for compatibility with legacy behavior.
 		// return nil, fmt.Errorf("pattern: %s match start: %s got matches count: %d, but require %d.", pattern, start, matchCount, matchNum)
 	}
@@ -897,8 +902,6 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		trueUpthis = upthis
 		downthis = Max(0, int64(in.Downloaded-uint(selfPeer.Downloaded)))
 		trueDownthis = downthis
-		var isCheater bool //todo
-		o.log.Warn(isCheater)
 
 		var seedTime int64
 		var leechTime int64 // TODO: where can find
@@ -914,32 +917,35 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			!(user.Class >= constant.UC_VIP || isDonor) && isIPSeedBox == 1 {
 
 			// 获取速率设置项
-			var notSeedBoxMaxSpeedMbps = 10 //TODO 获取速率设置项
 			upSpeedMbps := calculateUpSpeedMbps(trueUpthis, selfPeer.Announcetime)
-			if upSpeedMbps > float64(notSeedBoxMaxSpeedMbps) {
-				//TODO 下载超速
+			if upSpeedMbps > float64(constant.NotSeedBoxMaxSpeedMbps) { //超速
 				//updateDownloadPrivileges()
-				//err
+				user.UploadPos = "no"
+				o.urepo.Update(ctx, user)
+				// TODO clearCache
 				return
 			}
+		}
 
-			//TODO checkCheater
-			var isCheater bool
-			//cheaterdet_security
+		var isCheater bool
+		//cheaterdet_security
+		if constant.CheateredSecurity > 0 {
+			if user.Class < constant.NoDetectSecurityUserClass && selfPeer.Announcetime > 10 {
 
-			//snatchInfo
-			snatchInfo, err = o.snatch.GetSnatched(ctx, torrent.ID, user.Id)
-			if err != nil {
-				return
 			}
-			if !isCheater && (trueUpthis > 0 || trueDownthis > 0) {
-				//todo getDataTraffic
-				o.log.Info(snatchInfo)
-				// $dataTraffic = getDataTraffic($torrent, $_GET, $az, $self, $snatchInfo, apply_filter('torrent_promotion', $torrent));
-				// $USERUPDATESET[] = "uploaded = uploaded + " . $dataTraffic['uploaded_increment_for_user'];
-				// $USERUPDATESET[] = "downloaded = downloaded + " . $dataTraffic['downloaded_increment_for_user'];
-			}
+		}
 
+		//snatchInfo
+		snatchInfo, err = o.snatch.GetSnatched(ctx, torrent.ID, user.Id)
+		if err != nil {
+			return
+		}
+		if !isCheater && (trueUpthis > 0 || trueDownthis > 0) {
+			//todo getDataTraffic
+			o.log.Info(snatchInfo)
+			// $dataTraffic = getDataTraffic($torrent, $_GET, $az, $self, $snatchInfo, apply_filter('torrent_promotion', $torrent));
+			// $USERUPDATESET[] = "uploaded = uploaded + " . $dataTraffic['uploaded_increment_for_user'];
+			// $USERUPDATESET[] = "downloaded = downloaded + " . $dataTraffic['downloaded_increment_for_user'];
 		}
 
 	}
@@ -1176,6 +1182,93 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	err = o.urepo.Update(ctx, user)
 
 	return
+}
+
+func (o *TrackerAnnounceUsecase) cheaterCheck(ctx context.Context, user *model.User, userid, torrentid, uploaded, downloaded, anctime, seeders, leechers int64) (bool, error) {
+
+	var upspeed = int64(0)
+	if uploaded > 0 {
+		upspeed = uploaded / anctime
+	}
+
+	//$mustBeCheaterSpeed = 1024 * 1024 * 1000; //1000 MB/s
+	mustBeCheaterSpeed := constant.MaximumUploadSpeed * 1024 * 1024 / 8
+	//$mayBeCheaterSpeed = 1024 * 1024 * 100; //100 MB/s
+	mayBeCheaterSpeed := mustBeCheaterSpeed / 2
+
+	if uploaded > constant.TrafficCntPerG && upspeed > (int64(mustBeCheaterSpeed)/constant.CheateredSecurity) {
+		//Uploaded more than 1 GB with uploading rate higher than 100 MByte/S (For Consertive level). This is no doubt cheating.
+		comment := fmt.Sprintf("User account was automatically disabled by system (Upload speed: %d MB/s)", uploaded/1024/1024/8)
+		cheater := &model.Cheaters{
+			ID:         0,
+			Added:      time.Now(),
+			UserID:     userid,
+			TorrentID:  torrentid,
+			Uploaded:   uploaded,
+			Downloaded: downloaded,
+			Anctime:    anctime,
+			Seeders:    seeders,
+			Leechers:   leechers,
+			Comment:    comment,
+		}
+		err := o.cheaterRepo.Create(ctx, cheater)
+		if err != nil {
+			return true, err
+		}
+		user.Enabled = "no"
+		err = o.urepo.Update(ctx, user)
+		if err != nil {
+			return true, err
+		}
+
+		return true, nil
+	}
+
+	if uploaded > constant.TrafficCntPerG && upspeed > int64(mayBeCheaterSpeed/constant.CheateredSecurity) {
+		//Uploaded more than 1 GB with uploading rate higher than 25 MByte/S (For Consertive level). This is likely cheating.
+		startTime := time.Now().AddDate(0, 0, -1)
+		cheaterList, err := o.cheaterRepo.Query(ctx, userid, torrentid, startTime)
+		if err != nil {
+			return false, err
+		}
+		if len(cheaterList) == 0 {
+			comment := "User is uploading fast when there is few leechers"
+			cheater := &model.Cheaters{
+				ID:         0,
+				Added:      time.Now(),
+				UserID:     userid,
+				TorrentID:  torrentid,
+				Uploaded:   uploaded,
+				Downloaded: downloaded,
+				Anctime:    anctime,
+				Seeders:    seeders,
+				Leechers:   leechers,
+				Hit:        1,
+				Comment:    comment,
+			}
+			err := o.cheaterRepo.Create(ctx, cheater)
+			if err != nil {
+				return false, err
+			}
+
+		} else {
+			cheater := cheaterList[0]
+			cheater.Hit++
+			err := o.cheaterRepo.Update(ctx, cheater)
+			if err != nil {
+				return false, err
+			}
+		}
+		return false, nil
+	}
+
+	if constant.CheateredSecurity <= 1 {
+		return false, nil
+	}
+
+
+
+	return false, nil
 }
 
 func Max(a, b int64) int64 {
