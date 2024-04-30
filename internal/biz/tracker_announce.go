@@ -158,14 +158,13 @@ func (o *TrackerAnnounceUsecase) CheckClient(ctx http.Context, in *AnnounceReque
 			isPeerIdAllowed = true
 		} else {
 
-			// pattern := allow.PeerIdPattern
-			// start := allow.PeerIdStart
-			// matchType := allow.PeerIdMatchType
-			// matchNum := allow.PeerIdMatchNum
+			pattern := allow.PeerIdPattern
+			start := allow.PeerIdStart
+			matchType := allow.PeerIdMatchType
+			matchNum := allow.PeerIdMatchNum
 
-			//todo
-			//$peerIdResult = $this->isAllowed($pa
-			var peerIdResult int64
+			//$peerIdResult = $this->isAllowed
+			peerIdResult := o.isAllowed(pattern, start, in.PeerID, matchNum, matchType)
 			if peerIdResult == 1 {
 				isPeerIdAllowed = true
 			}
@@ -240,6 +239,77 @@ func (o *TrackerAnnounceUsecase) CheckClient(ctx http.Context, in *AnnounceReque
 
 	return nil
 
+}
+
+func (o *TrackerAnnounceUsecase) getPatternMatches(pattern, start string, matchNum int64) ([]string, error) {
+	matches := regexp.MustCompile(pattern).FindStringSubmatch(start)
+	if matches == nil {
+		return nil, fmt.Errorf("pattern: %s can not match start: %s", pattern, start)
+	}
+
+	matchCount := len(matches) - 1
+	if matchNum > int64(matchCount) {
+		// Remove this check for compatibility with legacy behavior.
+		// return nil, fmt.Errorf("pattern: %s match start: %s got matches count: %d, but require %d.", pattern, start, matchCount, matchNum)
+	}
+
+	return matches[1 : matchNum+1], nil
+}
+
+func (o *TrackerAnnounceUsecase) isAllowed(pattern, start, value string, matchNum int64, matchType string) int {
+
+	logPrefix := ""
+	matchBench, _ := o.getPatternMatches(pattern, start, matchNum)
+	o.log.Debugf("%s, matchBench: %v", logPrefix, matchBench)
+
+	if !regexp.MustCompile(pattern).MatchString(value) {
+		o.log.Errorf("%s, pattern: (%s) not match: (%s)", logPrefix, pattern, value)
+		return 0
+	}
+
+	if matchNum <= 0 {
+		return 1
+	}
+
+	matchTarget := regexp.MustCompile(pattern).FindStringSubmatch(value)[1:]
+	o.log.Debugf("%s, matchTarget: %v", logPrefix, matchTarget)
+
+	for i := 0; i < int(matchNum); i++ {
+		if i >= len(matchBench) || i >= len(matchTarget) {
+			break
+		}
+
+		var benchValue, targetValue int
+
+		switch matchType {
+		case "dec":
+			benchValue = parseInt(matchBench[i], 10)
+			targetValue = parseInt(matchTarget[i], 10)
+		case "hex":
+			benchValue = parseInt(matchBench[i], 16)
+			targetValue = parseInt(matchTarget[i], 16)
+		default:
+			panic(fmt.Errorf("Invalid match type: %s", matchType))
+		}
+
+		if targetValue > benchValue {
+			// Higher, pass directly
+			return 1
+		} else if targetValue < benchValue {
+			return 2
+		}
+	}
+
+	// NOTE: At last, after all positions checked, not [NOT_MATCH] or lower, it is passed!
+	return 1
+}
+
+func parseInt(s string, base int) int {
+	i, err := strconv.ParseInt(s, base, 64)
+	if err != nil {
+		panic(err)
+	}
+	return int(i)
 }
 func (o *announceParamsChecker) CheckUserAgent(ctx http.Context) {
 	if o.Err != nil {
