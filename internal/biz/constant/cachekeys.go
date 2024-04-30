@@ -18,5 +18,6 @@ const (
 	CacheKey_HR = "hit_and_run:%d:%d" // {userId}{torrentId}
 
 	// agentAllowed
-	CacheKeyAllowClientKey = "all_agent_allows:php"
+	CacheKeyAgentAllowKey = "all_agent_allows:php"
+	CacheKeyAgentDenyKey  = "all_agent_denies:php"
 )

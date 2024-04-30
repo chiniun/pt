@@ -60,14 +60,15 @@ type AnnounceResponse struct {
 // TrackerAnnounceRepo
 // TrackerUsecase is a Tracker usecase.
 type TrackerAnnounceUsecase struct {
-	urepo   inter.UserRepo
-	trepo   inter.TorrentRepo
-	peerpo  inter.PeerRepo
-	cache   inter.CacheRepo
-	snatch  inter.SnatchedRepo
-	hitpo   inter.HitRunsRepo
-	agentpo inter.AgentAllowedRepo
-	log     *log.Helper
+	urepo       inter.UserRepo
+	trepo       inter.TorrentRepo
+	peerpo      inter.PeerRepo
+	cache       inter.CacheRepo
+	snatch      inter.SnatchedRepo
+	hitpo       inter.HitRunsRepo
+	agentpo     inter.AgentAllowedRepo
+	agentDenyPo inter.AgentDenyRepo
+	log         *log.Helper
 }
 
 // NewTrackerAnnounceUsecase new a Tracker usecase.
@@ -79,16 +80,18 @@ func NewTrackerAnnounceUsecase(
 	snatch inter.SnatchedRepo,
 	hitpo inter.HitRunsRepo,
 	agentpo inter.AgentAllowedRepo,
+	agentDenyPo inter.AgentDenyRepo,
 	logger log.Logger) *TrackerAnnounceUsecase {
 	return &TrackerAnnounceUsecase{
-		urepo:   urepo,
-		trepo:   trepo,
-		peerpo:  peerpo,
-		cache:   cache,
-		snatch:  snatch,
-		hitpo:   hitpo,
-		agentpo: agentpo,
-		log:     log.NewHelper(logger),
+		urepo:       urepo,
+		trepo:       trepo,
+		peerpo:      peerpo,
+		cache:       cache,
+		snatch:      snatch,
+		hitpo:       hitpo,
+		agentpo:     agentpo,
+		agentDenyPo: agentDenyPo,
+		log:         log.NewHelper(logger),
 	}
 }
 
@@ -123,7 +126,7 @@ func (o *announceParamsChecker) Do(ctx http.Context) (*AnnounceRequest, error) {
 func (o *TrackerAnnounceUsecase) CheckClient(ctx http.Context, in *AnnounceRequest) error {
 	allows := make([]*model.AgentAllowedFamily, 0)
 
-	allowStr, err := o.cache.Get(ctx, constant.CacheKeyAllowClientKey)
+	allowStr, err := o.cache.Get(ctx, constant.CacheKeyAgentAllowKey)
 	if err != nil && err != redis.Nil {
 		return errors.Wrap(err, "Get")
 	}
@@ -135,6 +138,8 @@ func (o *TrackerAnnounceUsecase) CheckClient(ctx http.Context, in *AnnounceReque
 		if err != nil {
 			return errors.Wrap(err, "GetList")
 		}
+		data, _ := json.Marshal(allows)
+		o.cache.Set(ctx, constant.CacheKeyAgentAllowKey, string(data), 60*60*24*time.Second)
 	}
 
 	var agentAllowPassed *model.AgentAllowedFamily
@@ -142,7 +147,6 @@ func (o *TrackerAnnounceUsecase) CheckClient(ctx http.Context, in *AnnounceReque
 
 	for _, allow := range allows {
 
-		agentAllowId := allow.ID
 		var (
 			isPeerIdAllowed = false
 			isAgentAllowed  = false
@@ -189,8 +193,49 @@ func (o *TrackerAnnounceUsecase) CheckClient(ctx http.Context, in *AnnounceReque
 	}
 
 	if agentAllowPassed == nil {
-		return errors.New("Banned Client")
 		//throw new ClientNotAllowedException("Banned Client, Please goto " . getSchemeAndHttpHost() . "/faq.php#id29 for a list of acceptable clients");
+		return errors.New("Banned Client")
+	}
+
+	if agentAllowPassed.Exception == "Yes" {
+		// check if exclude // checkIsDenied($peerId, $agent, $familyId)
+		allowDenys := make([]*model.AgentAllowedException, 0)
+
+		allowStr, err := o.cache.Get(ctx, constant.CacheKeyAgentDenyKey)
+		if err != nil && err != redis.Nil {
+			return errors.Wrap(err, "Get")
+		}
+
+		if len(allowStr) != 0 {
+			json.Unmarshal([]byte(allowStr), &allowDenys)
+		} else {
+			allowDenys, err = o.agentDenyPo.GetList(ctx)
+			if err != nil {
+				return errors.Wrap(err, "GetList")
+			}
+
+			data, _ := json.Marshal(allowDenys)
+			o.cache.Set(ctx, constant.CacheKeyAgentDenyKey, string(data), 60*60*24*time.Second)
+		}
+
+		allowDenysFiltered := make([]*model.AgentAllowedException, 0)
+		for _, deny := range allowDenys {
+			if deny.FamilyID != int(agentAllowPassed.ID) {
+				continue
+			}
+			allowDenysFiltered = append(allowDenysFiltered, deny)
+		}
+
+		for _, agentDeny := range allowDenysFiltered {
+			if agentDeny.Agent == in.UA && regexp.MustCompile("^"+agentDeny.PeerId).MatchString(in.PeerID) {
+				return fmt.Errorf("[%d-%d]Client: %s is banned due to: %s", agentAllowPassed.ID, agentDeny.ID, agentDeny.Name, *agentDeny.Comment)
+			}
+		}
+
+	}
+
+	if ctx.Request().URL.Scheme == "https" && agentAllowPassed.Allowhttps != "Yes" {
+		return errors.New("This client does not support https well")
 	}
 
 	return nil

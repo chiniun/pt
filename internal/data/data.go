@@ -20,6 +20,7 @@ var ProviderSet = wire.NewSet(
 	NewTorrent,
 	NewPeer,
 	NewAgentAllowed,
+	NewAgentDeny,
 	NewHitRuns,
 	NewSnatched,
 	wire.Bind(new(inter.TrackerScrapeRepo), new(*User)),
@@ -28,6 +29,7 @@ var ProviderSet = wire.NewSet(
 	wire.Bind(new(inter.TorrentRepo), new(*Torrent)),
 	wire.Bind(new(inter.PeerRepo), new(*Peer)),
 	wire.Bind(new(inter.AgentAllowedRepo), new(*AgentAllowed)),
+	wire.Bind(new(inter.AgentDenyRepo), new(*AgentDeny)),
 	wire.Bind(new(inter.HitRunsRepo), new(*HitRuns)),
 	wire.Bind(new(inter.SnatchedRepo), new(*Snatched)),
 )

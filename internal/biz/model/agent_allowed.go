@@ -6,11 +6,11 @@ type AgentAllowedFamily struct {
 	StartName       string  `db:"start_name" json:"start_name,omitempty" form:"start_name"`
 	PeerIdPattern   string  `db:"peer_id_pattern" json:"peer_id_pattern,omitempty" form:"peer_id_pattern"`
 	PeerIdMatchNum  uint8   `db:"peer_id_match_num" json:"peer_id_match_num,omitempty" form:"peer_id_match_num"`
-	PeerIdMatchType string  `db:"peer_id_matchtype" json:"peer_id_match_type,omitempty" form:"peer_id_match_type"`
+	PeerIdMatchType string  `db:"peer_id_matchtype" json:"peer_id_matchtype,omitempty" form:"peer_id_matchtype"`
 	PeerIdStart     string  `db:"peer_id_start" json:"peer_id_start,omitempty" form:"peer_id_start"`
 	AgentPattern    string  `db:"agent_pattern" json:"agent_pattern,omitempty" form:"agent_pattern"`
 	AgentMatchNum   uint8   `db:"agent_match_num" json:"agent_match_num,omitempty" form:"agent_match_num"`
-	AgentMatchType  string  `db:"agent_matchtype" json:"agent_match_type,omitempty" form:"agent_match_type"`
+	AgentMatchType  string  `db:"agent_matchtype" json:"agent_matchtype,omitempty" form:"agent_matchtype"`
 	AgentStart      string  `db:"agent_start" json:"agent_start,omitempty" form:"agent_start"`
 	Exception       string  `db:"exception" json:"exception,omitempty" form:"exception"`
 	Allowhttps      string  `db:"allowhttps" json:"allowhttps,omitempty" form:"allowhttps"`
