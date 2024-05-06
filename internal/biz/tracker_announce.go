@@ -70,6 +70,7 @@ type TrackerAnnounceUsecase struct {
 	agentpo     inter.AgentAllowedRepo
 	agentDenyPo inter.AgentDenyRepo
 	cheaterRepo inter.CheaterRepo
+	seedBoxRepo inter.SeedBoxRepo
 	log         *log.Helper
 }
 
@@ -84,6 +85,7 @@ func NewTrackerAnnounceUsecase(
 	agentpo inter.AgentAllowedRepo,
 	agentDenyPo inter.AgentDenyRepo,
 	cheaterRepo inter.CheaterRepo,
+	seedBoxRepo inter.SeedBoxRepo,
 	logger log.Logger) *TrackerAnnounceUsecase {
 	return &TrackerAnnounceUsecase{
 		urepo:       urepo,
@@ -95,6 +97,7 @@ func NewTrackerAnnounceUsecase(
 		agentpo:     agentpo,
 		agentDenyPo: agentDenyPo,
 		cheaterRepo: cheaterRepo,
+		seedBoxRepo: seedBoxRepo,
 		log:         log.NewHelper(logger),
 	}
 }
@@ -776,14 +779,30 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		return resp, errors.New(fmt.Sprintf("There is a minimum announce time: %d wait", announceWait))
 	}
 
-	var isIPSeedBox int8 // TODO 盒子判断
+	var isIPSeedBoxInt int8 // TODO 盒子判断
 
 	if constant.Setting_IsSeedBoxRuleEnabled {
+
+		var isIPSeedBox bool
 		if ipv4 != "" {
-			isIPSeedBox = 0
+			isIPSeedBox, err = o.isIPSeedBox(ctx, ipv4, user.Id)
+			if err != nil {
+				return
+			}
 		}
+
+		if !isIPSeedBox && ipv6 != "" {
+			isIPSeedBox, err = o.isIPSeedBox(ctx, ipv6, user.Id)
+			if err != nil {
+				return
+			}
+		}
+		if isIPSeedBox {
+			isIPSeedBoxInt = 1
+		}
+
 	}
-	o.log.Warn("isIPSeedBox", isIPSeedBox)
+	o.log.Warn("isIPSeedBoxInt", isIPSeedBoxInt)
 
 	var snatchInfo *model.Snatched
 	var upthis, trueUpthis, downthis, trueDownthis int64
@@ -916,7 +935,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		}
 
 		if selfPeer.Announcetime > 0 && constant.Setting_IsSeedBoxRuleEnabled &&
-			!(user.Class >= constant.UC_VIP || isDonor) && isIPSeedBox == 1 {
+			!(user.Class >= constant.UC_VIP || isDonor) && isIPSeedBoxInt == 1 {
 
 			// 获取速率设置项
 			upSpeedMbps := calculateUpSpeedMbps(trueUpthis, selfPeer.Announcetime)
@@ -949,7 +968,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			o.log.Info(snatchInfo)
 			//todo $_GET
 			// $dataTraffic = getDataTraffic($torrent, $_GET, $az, $self, $snatchInfo, apply_filter('torrent_promotion', $torrent));
-			dataTraffic, err = o.getDataTraffic(torrent, in, user, selfPeer, snatchInfo, nil)
+			dataTraffic, err = o.getDataTraffic(ctx, torrent, in, user, selfPeer, snatchInfo, nil)
 			if err != nil {
 				return
 			}
@@ -990,7 +1009,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			updateMap["last_action"] = time.Now().Format(time.DateOnly) //dt
 			updateMap["seeder"] = seeder
 			updateMap["agent"] = in.UA
-			updateMap["is_seed_box"] = isIPSeedBox
+			updateMap["is_seed_box"] = isIPSeedBoxInt
 			updateMap["finished"] = "yes"
 			updateMap["finishedat"] = time.Now().Unix()
 			updateMap["completedat"] = time.Now().Format(time.DateOnly)
@@ -1042,7 +1061,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 				Passkey:     passkey,
 				IPv4:        ipv4,
 				IPv6:        ipv6,
-				IsSeedBox:   isIPSeedBox,
+				IsSeedBox:   isIPSeedBoxInt,
 			}
 
 			err = o.peerpo.Insert(ctx, newPeer)
@@ -1347,7 +1366,7 @@ func (o *TrackerAnnounceUsecase) cheaterCheck(ctx context.Context, user *model.U
 	return false, nil
 }
 
-func (o *TrackerAnnounceUsecase) getDataTraffic(torrent *model.TorrentView, queries *AnnounceRequest, user *model.User, peer *model.PeerView, snatch *model.Snatched, promotionInfo map[string]int64) (map[string]int64, error) {
+func (o *TrackerAnnounceUsecase) getDataTraffic(ctx context.Context, torrent *model.TorrentView, queries *AnnounceRequest, user *model.User, peer *model.PeerView, snatch *model.Snatched, promotionInfo map[string]int64) (map[string]int64, error) {
 
 	//!isset($user['__is_donor'] //return error
 
@@ -1414,7 +1433,12 @@ func (o *TrackerAnnounceUsecase) getDataTraffic(torrent *model.TorrentView, quer
 
 	isSeedBoxRuleEnabled := constant.Setting_IsSeedBoxRuleEnabled
 	if isSeedBoxRuleEnabled && torrent.Owner != user.Id && user.Class < constant.UC_VIP && !isDono(user) {
-		if o.isIPSeedBox("", user.Id) { //todo //queries["ip"]
+
+		is, err := o.isIPSeedBox(ctx, queries.IP, user.Id)
+		if err != nil {
+			return nil, err
+		}
+		if is { //todo //queries["ip"]
 			if constant.IsSeedBoxNoPromotion {
 				uploadedIncrementForUser = realUploaded
 				downloadedIncrementForUser = realDownloaded
@@ -1451,9 +1475,79 @@ func (o *TrackerAnnounceUsecase) getDataTraffic(torrent *model.TorrentView, quer
 	return resp, nil
 }
 
-func (o *TrackerAnnounceUsecase) isIPSeedBox(ip string, uid int64) bool {
+func (o *TrackerAnnounceUsecase) isIPSeedBox(ctx context.Context, ip string, uid int64) (bool, error) {
+	key := getIpSeedBoxCacheKey(ip, uid)
+	result, err := o.cache.Get(ctx, key)
+	if err != nil && err != redis.Nil {
+		return false, err
+	}
+	if result == "1" {
+		return true, nil
+	}
 
-	return false
+	if result == "0" {
+		return false, nil
+	}
+
+	ipblock := net.ParseIP(ip)
+	if ipblock == nil {
+		return false, errors.Wrap(err, "ParseIp: "+ip)
+	}
+
+	ipNumeric := "123" //TODO
+	ipVersion := int64(4)
+
+	seedBoxQ := &model.SeedBoxRecord{
+		Status:         constant.SEED_BOX_STATUS_ALLOWED,
+		IPBeginNumeric: ipNumeric,
+		IPEndNumeric:   ipNumeric,
+		Version:        ipVersion,
+		IsAllowed:      1,
+	}
+	seedBox, err := o.seedBoxRepo.Query(ctx, seedBoxQ)
+	if err != nil && !errors.As(err, gorm.ErrRecordNotFound) {
+		return false, err
+	}
+	if seedBox != nil && seedBox.ID != 0 {
+		//do_log("$key, get result from database, is_allowed = 1, false");
+		o.cache.Set(ctx, key, "0", 300*time.Second)
+		return false, nil
+	}
+
+	seedBoxQ.IsAllowed = 0
+	seedBoxQ.Type = constant.SEED_BOX_TYPE_ADMIN
+	seedBox, err = o.seedBoxRepo.Query(ctx, seedBoxQ)
+	if err != nil && !errors.As(err, gorm.ErrRecordNotFound) {
+		return false, err
+	}
+	if seedBox != nil && seedBox.ID != 0 {
+		//do_log("$key, get result from admin, true");
+		o.cache.Set(ctx, key, "1", 300*time.Second)
+		return true, nil
+	}
+
+	if uid != 0 {
+		seedBoxQ.UID = uid
+		seedBoxQ.Type = constant.SEED_BOX_TYPE_USER
+		seedBox, err = o.seedBoxRepo.Query(ctx, seedBoxQ)
+		if err != nil && !errors.As(err, gorm.ErrRecordNotFound) {
+			return false, err
+		}
+		if seedBox != nil && seedBox.ID != 0 {
+			//do_log("$key, get result from user, true");
+			o.cache.Set(ctx, key, "1", 300*time.Second)
+			return true, nil
+		}
+	}
+
+	//do_log("$key, no result, false");
+	o.cache.Set(ctx, key, "0", 300*time.Second)
+
+	return false, nil
+}
+
+func getIpSeedBoxCacheKey(ip string, uid int64) string {
+	return fmt.Sprintf(constant.CacheKeyIpSeedBox, ip, uid)
 }
 
 func Max(a, b int64) int64 {

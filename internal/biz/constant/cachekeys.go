@@ -22,4 +22,6 @@ const (
 	CacheKeyAgentDenyKey  = "all_agent_denies:php"
 
 	CacheKey_TORRENT_GLOBAL_STATE = "global_promotion_state"
+
+	CacheKeyIpSeedBox = "nexus_is_ip_seed_box:ip:%s:uid:%d" // {ip}{userId}
 )

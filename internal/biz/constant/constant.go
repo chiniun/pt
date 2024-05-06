@@ -74,7 +74,7 @@ var (
 
 	IsSeedBoxNoPromotion = true //todo
 
-	MaxUploaded = 1  //todo
+	MaxUploaded         = 1 //todo
 	MaxUploadedDuration = 1 //todo
 )
 
@@ -87,4 +87,15 @@ const (
 	TORRENT_PROMOTION_HALF_DOWN
 	TORRENT_PROMOTION_HALF_DOWN_TWO_TIMES_UP
 	TORRENT_PROMOTION_ONE_THIRD_DOWN
+)
+
+const (
+	SEED_BOX_TYPE_USER  = 1
+	SEED_BOX_TYPE_ADMIN = 2
+)
+
+const (
+	SEED_BOX_STATUS_UNAUDITED = 0
+	SEED_BOX_STATUS_ALLOWED   = 1
+	SEED_BOX_STATUS_DENIED    = 2
 )
