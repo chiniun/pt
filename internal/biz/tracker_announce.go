@@ -789,6 +789,8 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	var upthis, trueUpthis, downthis, trueDownthis int64
 	var announcetime int64
 
+	var dataTraffic = make(map[string]int64, 0)
+
 	if selfPeer.ID == 0 {
 		sameIPRecord, err := o.peerpo.GetPeer(ctx, torrent.ID, user.Id, ip)
 		if err == nil && sameIPRecord.ID != 0 && seeder == "yes" {
@@ -931,7 +933,10 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		//cheaterdet_security
 		if constant.CheateredSecurity > 0 {
 			if user.Class < constant.NoDetectSecurityUserClass && selfPeer.Announcetime > 10 {
-
+				isCheater, err = o.cheaterCheck(ctx, user, torrent.ID, upthis, downthis, selfPeer.Announcetime, torrent.Seeders, torrent.Leechers)
+				if err != nil {
+					return resp, err
+				}
 			}
 		}
 
@@ -941,13 +946,16 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			return
 		}
 		if !isCheater && (trueUpthis > 0 || trueDownthis > 0) {
-			//todo getDataTraffic
 			o.log.Info(snatchInfo)
+			//todo $_GET
 			// $dataTraffic = getDataTraffic($torrent, $_GET, $az, $self, $snatchInfo, apply_filter('torrent_promotion', $torrent));
+			dataTraffic, err = o.getDataTraffic(torrent, in, user, selfPeer, snatchInfo, nil)
+			if err != nil {
+				return
+			}
 			// $USERUPDATESET[] = "uploaded = uploaded + " . $dataTraffic['uploaded_increment_for_user'];
 			// $USERUPDATESET[] = "downloaded = downloaded + " . $dataTraffic['downloaded_increment_for_user'];
 		}
-
 	}
 
 	// set non-type event
@@ -1166,16 +1174,8 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	}
 
 	// 详细数据见 nexsusPHP中USERUPDATESET
-	//realUploaded,
-	//uploaded_increment := 0
-	//uploadedIncrementForUser,
-	uploaded_increment_for_user := 0
-	//realDownloaded,
-	//downloaded_increment := 0
-	//downloadedIncrementForUser,
-	downloaded_increment_for_user := 0
-	user.Uploaded += int64(uploaded_increment_for_user)
-	user.Downloaded += int64(downloaded_increment_for_user)
+	user.Uploaded += int64(dataTraffic["uploaded_increment_for_user"])
+	user.Downloaded += int64(dataTraffic["downloaded_increment_for_user"])
 	if clientSelect != 0 {
 		user.ClientSelect = clientSelect
 	}
@@ -1184,7 +1184,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	return
 }
 
-func (o *TrackerAnnounceUsecase) cheaterCheck(ctx context.Context, user *model.User, userid, torrentid, uploaded, downloaded, anctime, seeders, leechers int64) (bool, error) {
+func (o *TrackerAnnounceUsecase) cheaterCheck(ctx context.Context, user *model.User, torrentid, uploaded, downloaded, anctime, seeders, leechers int64) (bool, error) {
 
 	var upspeed = int64(0)
 	if uploaded > 0 {
@@ -1202,7 +1202,7 @@ func (o *TrackerAnnounceUsecase) cheaterCheck(ctx context.Context, user *model.U
 		cheater := &model.Cheaters{
 			ID:         0,
 			Added:      time.Now(),
-			UserID:     userid,
+			UserID:     user.Id,
 			TorrentID:  torrentid,
 			Uploaded:   uploaded,
 			Downloaded: downloaded,
@@ -1227,7 +1227,7 @@ func (o *TrackerAnnounceUsecase) cheaterCheck(ctx context.Context, user *model.U
 	if uploaded > constant.TrafficCntPerG && upspeed > int64(mayBeCheaterSpeed/constant.CheateredSecurity) {
 		//Uploaded more than 1 GB with uploading rate higher than 25 MByte/S (For Consertive level). This is likely cheating.
 		startTime := time.Now().AddDate(0, 0, -1)
-		cheaterList, err := o.cheaterRepo.Query(ctx, userid, torrentid, startTime)
+		cheaterList, err := o.cheaterRepo.Query(ctx, user.Id, torrentid, startTime)
 		if err != nil {
 			return false, err
 		}
@@ -1236,7 +1236,7 @@ func (o *TrackerAnnounceUsecase) cheaterCheck(ctx context.Context, user *model.U
 			cheater := &model.Cheaters{
 				ID:         0,
 				Added:      time.Now(),
-				UserID:     userid,
+				UserID:     user.Id,
 				TorrentID:  torrentid,
 				Uploaded:   uploaded,
 				Downloaded: downloaded,
@@ -1266,9 +1266,194 @@ func (o *TrackerAnnounceUsecase) cheaterCheck(ctx context.Context, user *model.U
 		return false, nil
 	}
 
+	if uploaded > constant.TrafficCntPerG && upspeed > constant.TrafficCntPerMB && leechers < (2*constant.CheateredSecurity) {
+		startTime := time.Now().AddDate(0, 0, -1)
+		cheaterList, err := o.cheaterRepo.Query(ctx, user.Id, torrentid, startTime)
+		if err != nil {
+			return false, err
+		}
+		if len(cheaterList) == 0 {
+			comment := "User is uploading fast when there is few leechers"
+			cheater := &model.Cheaters{
+				ID:         0,
+				Added:      time.Now(),
+				UserID:     user.Id,
+				TorrentID:  torrentid,
+				Uploaded:   uploaded,
+				Downloaded: downloaded,
+				Anctime:    anctime,
+				Seeders:    seeders,
+				Leechers:   leechers,
+				Hit:        1,
+				Comment:    comment,
+			}
+			err := o.cheaterRepo.Create(ctx, cheater)
+			if err != nil {
+				return false, err
+			}
 
+		} else {
+			cheater := cheaterList[0]
+			cheater.Hit++
+			err := o.cheaterRepo.Update(ctx, cheater)
+			if err != nil {
+				return false, err
+			}
+		}
+
+		return false, nil
+	}
+
+	if uploaded > constant.TrafficCnt10MB && upspeed > constant.TrafficCnt100KB && leechers == 0 {
+		//Uploaded more than 10 MB with uploading speed faster than 100 KByte/S when there is no leecher. This is likely cheating.
+		startTime := time.Now().AddDate(0, 0, -1)
+		cheaterList, err := o.cheaterRepo.Query(ctx, user.Id, torrentid, startTime)
+		if err != nil {
+			return false, err
+		}
+		if len(cheaterList) == 0 {
+			comment := "User is uploading when there is no leecher"
+			cheater := &model.Cheaters{
+				ID:         0,
+				Added:      time.Now(),
+				UserID:     user.Id,
+				TorrentID:  torrentid,
+				Uploaded:   uploaded,
+				Downloaded: downloaded,
+				Anctime:    anctime,
+				Seeders:    seeders,
+				Leechers:   leechers,
+				Hit:        1,
+				Comment:    comment,
+			}
+			err := o.cheaterRepo.Create(ctx, cheater)
+			if err != nil {
+				return false, err
+			}
+
+		} else {
+			cheater := cheaterList[0]
+			cheater.Hit++
+			err := o.cheaterRepo.Update(ctx, cheater)
+			if err != nil {
+				return false, err
+			}
+		}
+
+		return false, nil
+
+	}
 
 	return false, nil
+}
+
+func (o *TrackerAnnounceUsecase) getDataTraffic(torrent *model.TorrentView, queries *AnnounceRequest, user *model.User, peer *model.PeerView, snatch *model.Snatched, promotionInfo map[string]int64) (map[string]int64, error) {
+
+	//!isset($user['__is_donor'] //return error
+
+	var (
+		realUploaded   = int64(0)
+		realDownloaded = int64(0)
+		downRatio      = float64(0)
+		upRatio        = float64(0)
+	)
+	if peer == nil {
+		realUploaded = int64(queries.Uploaded)
+		realDownloaded = int64(queries.Downloaded)
+		/**
+		 * If peer not exits, user increment = 0;
+		 */
+		// $upRatio = 0;
+		// $downRatio = 0;
+	}
+
+	if peer != nil {
+		realUploaded = Max(int64(queries.Uploaded)-peer.Uploaded, 0)
+		realDownloaded = Max(int64(queries.Downloaded)-peer.Downloaded, 0)
+		// 全局优惠状态
+		spStateReal := constant.TORRENT_PROMOTION_DEFAULT
+		_, ok := promotionInfo["__ignore_global_sp_state"]
+		if ok {
+			spStateReal = promotionInfo["sp_state"]
+		} else if constant.TORRENT_PROMOTION_GLOBAL != constant.TORRENT_PROMOTION_NORMAL {
+			spStateReal = constant.TORRENT_PROMOTION_GLOBAL
+		} else {
+			spStateReal = torrent.SPState
+		}
+		if spStateReal == constant.TORRENT_PROMOTION_DEFAULT {
+			spStateReal = constant.TORRENT_PROMOTION_NORMAL
+		}
+
+		uploaderRatio := constant.TorrentUploaderdouble
+
+		if torrent.Owner == user.Id {
+			//uploader, use the bigger one  // [IS_UPLOADER], upRatio: $upRatio";
+			upRatio = math.Max(float64(uploaderRatio), constant.TorrentPromotionTypes[spStateReal].UpMultiplier)
+		} else {
+			//[IS_NOT_UPLOADER], upRatio: $upRatio";
+			upRatio = constant.TorrentPromotionTypes[spStateReal].UpMultiplier
+		}
+
+		/**
+		 * VIP do not calculate downloaded
+		 * @since 1.7.13
+		 */
+
+		if user.Class == constant.UC_VIP {
+			//$log .= ", [IS_VIP], downRatio: $downRatio";
+			downRatio = 0
+		} else {
+			//$log .= ", [IS_NOT_VIP], downRatio: $downRatio";
+			downRatio = constant.TorrentPromotionTypes[spStateReal].DownMultiplier
+		}
+
+	}
+
+	uploadedIncrementForUser := int64(float64(realUploaded) * upRatio)
+	downloadedIncrementForUser := int64(float64(realDownloaded) * downRatio)
+
+	isSeedBoxRuleEnabled := constant.Setting_IsSeedBoxRuleEnabled
+	if isSeedBoxRuleEnabled && torrent.Owner != user.Id && user.Class < constant.UC_VIP && !isDono(user) {
+		if o.isIPSeedBox("", user.Id) { //todo //queries["ip"]
+			if constant.IsSeedBoxNoPromotion {
+				uploadedIncrementForUser = realUploaded
+				downloadedIncrementForUser = realDownloaded
+				//$log .= ", isIPSeedBox && isSeedBoxNoPromotion, increment for user = real";
+			}
+
+			maxUploadedTimes := constant.MaxUploaded
+			maxUploadedDurationSeconds := constant.MaxUploadedDuration * 3600
+			torrentTTL := int64(time.Now().Sub(torrent.Added).Seconds()) //time() - strtotime($torrent['added']);
+			timeRangeValid := (maxUploadedDurationSeconds == 0) || (torrentTTL < int64(maxUploadedDurationSeconds))
+			//$log .= ", maxUploadedTimes: $maxUploadedTimes, maxUploadedDurationSeconds: $maxUploadedDurationSeconds, timeRangeValid: $timeRangeValid";
+			if maxUploadedTimes > 0 && timeRangeValid {
+				//$log .= ", [LIMIT_UPLOADED]";
+				if snatch != nil && torrent.Size != 0 && snatch.Uploaded >= torrent.Size*int64(maxUploadedTimes) {
+					//$log .= ", snatchUploaded({$snatch['uploaded']}) >= torrentSize({$torrent['size']}) * times($maxUploadedTimes), uploadedIncrementForUser = 0";
+					uploadedIncrementForUser = 0
+				} else {
+					// $log .= ", snatchUploaded({$snatch['uploaded']}) < torrentSize({$torrent['size']}) * times($maxUploadedTimes), uploadedIncrementForUser do not change to 0";
+				}
+			} else {
+				//$log .= ", [NOT_LIMIT_UPLOADED]";
+			}
+
+		}
+	}
+
+	resp := map[string]int64{
+		"uploaded_increment":            realUploaded,
+		"uploaded_increment_for_user":   uploadedIncrementForUser,
+		"downloaded_increment":          realDownloaded,
+		"downloaded_increment_for_user": downloadedIncrementForUser,
+	}
+
+	return resp, nil
+}
+
+func (o *TrackerAnnounceUsecase) isIPSeedBox(ip string, uid int64) bool {
+
+	return false
 }
 
 func Max(a, b int64) int64 {

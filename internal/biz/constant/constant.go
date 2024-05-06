@@ -57,13 +57,34 @@ const (
 
 const (
 	//欺骗校验
-	CheateredSecurity = 2 //cheaterdet_security
+	CheateredSecurity     = 2 //cheaterdet_security //todo
+	TorrentUploaderdouble = 2 //上传双倍 //todo
 
 	MaximumUploadSpeed     = 8000
 	NotSeedBoxMaxSpeedMbps = 100
 
-	TrafficCntPerG = 1073741824
-	TrafficCnt10MB = 10485760
+	TrafficCntPerG  = 1073741824
+	TrafficCnt10MB  = 10485760
 	TrafficCntPerMB = 1048576
+	TrafficCnt100KB = 102400
+)
 
+var (
+	TORRENT_PROMOTION_GLOBAL = TORRENT_PROMOTION_NORMAL //todo redis 刷新
+
+	IsSeedBoxNoPromotion = true //todo
+
+	MaxUploaded = 1  //todo
+	MaxUploadedDuration = 1 //todo
+)
+
+const (
+	TORRENT_PROMOTION_DEFAULT int64 = iota
+	TORRENT_PROMOTION_NORMAL
+	TORRENT_PROMOTION_FREE
+	TORRENT_PROMOTION_TWO_TIMES_UP
+	TORRENT_PROMOTION_FREE_TWO_TIMES_UP
+	TORRENT_PROMOTION_HALF_DOWN
+	TORRENT_PROMOTION_HALF_DOWN_TWO_TIMES_UP
+	TORRENT_PROMOTION_ONE_THIRD_DOWN
 )

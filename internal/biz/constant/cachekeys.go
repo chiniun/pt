@@ -20,4 +20,6 @@ const (
 	// agentAllowed
 	CacheKeyAgentAllowKey = "all_agent_allows:php"
 	CacheKeyAgentDenyKey  = "all_agent_denies:php"
+
+	CacheKey_TORRENT_GLOBAL_STATE = "global_promotion_state"
 )

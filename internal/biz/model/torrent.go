@@ -65,7 +65,7 @@ type TorrentView struct {
 	ID             int64                    `gorm:"column:id"`
 	Size           int64                    `gorm:"column:size"`
 	Owner          int64                    `gorm:"column:owner"`
-	SPState        uint8                    `gorm:"column:sp_state"`
+	SPState        int64                    `gorm:"column:sp_state"` // 优惠状态
 	Seeders        int64                    `gorm:"column:seeders"`
 	Leechers       int64                    `gorm:"column:leechers"`
 	Timestamp      int64                    `gorm:"column:ts"`
