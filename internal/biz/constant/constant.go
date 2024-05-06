@@ -49,13 +49,14 @@ const (
 )
 
 type TrackerState int8
+
 const (
 	Seeder TrackerState = iota + 1
 	Leecher
 )
 
 const (
-	WaitSystem = "Yes"
+	WaitSystem  = "Yes"
 	MaxDlSystem = "Yes"
 )
 
@@ -63,15 +64,18 @@ const (
 	CheateredSecurity     = 2 //cheaterdet_security //todo
 	TorrentUploaderdouble = 2 //上传双倍 //todo
 
+	TaxFactor = 0.15 //todo
+
 	MaximumUploadSpeed     = 8000
 	NotSeedBoxMaxSpeedMbps = 100
+)
 
+const (
 	TrafficCntPerG  = 1073741824
 	TrafficCnt10MB  = 10485760
 	TrafficCntPerMB = 1048576
 	TrafficCnt100KB = 102400
 )
-
 
 var (
 	TORRENT_PROMOTION_GLOBAL = TORRENT_PROMOTION_NORMAL //todo redis 刷新
@@ -103,3 +107,5 @@ const (
 	SEED_BOX_STATUS_ALLOWED   = 1
 	SEED_BOX_STATUS_DENIED    = 2
 )
+
+const BUSINESS_TYPE_TORRENT_BE_DOWNLOADED = 1001;

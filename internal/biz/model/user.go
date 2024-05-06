@@ -130,3 +130,19 @@ type User struct {
 func (o *User) TableName() string {
 	return "users"
 }
+
+type BonusLog struct {
+	ID            int64     `gorm:"column:id;primaryKey;autoIncrement"`
+	BusinessType  int64     `gorm:"column:business_type;not null;default:0"`
+	UID           int64     `gorm:"column:uid;not null"`
+	OldTotalValue float64   `gorm:"column:old_total_value;not null;type:decimal(20,1)"`
+	Value         float64   `gorm:"column:value;not null;type:decimal(20,1)"`
+	NewTotalValue float64   `gorm:"column:new_total_value;not null;type:decimal(20,1)"`
+	Comment       string    `gorm:"column:comment"`
+	CreatedAt     time.Time `gorm:"column:created_at;not null;default:current_timestamp"`
+	UpdatedAt     time.Time `gorm:"column:updated_at;not null;default:current_timestamp;onUpdate:current_timestamp"`
+}
+
+func (o *BonusLog) TableName() string {
+	return "bonus_logs"
+}

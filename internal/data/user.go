@@ -75,3 +75,7 @@ func (o *User) Delete(ctx context.Context, id int64) error {
 func (o *User) HardDelete(ctx context.Context, id int64) error {
 	return o.data.DB.WithContext(ctx).Unscoped().Where("id = ?", id).Delete(&model.User{}).Error
 }
+
+func (o *User) CreateBonusLog(ctx context.Context, log *model.BonusLog) error {
+	return o.data.DB.WithContext(ctx).Model(new(model.BonusLog)).Create(log).Error
+}

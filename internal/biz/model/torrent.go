@@ -76,3 +76,17 @@ type TorrentView struct {
 	Price          float64                  `gorm:"column:price"`
 	Mode           string                   `gorm:"column:mode"`
 }
+
+type TorrentBuyLog struct {
+	ID        int64     `gorm:"column:id;primaryKey;autoIncrement"`
+	UID       int64     `gorm:"column:uid;not null"`
+	TorrentID int64     `gorm:"column:torrent_id;not null"`
+	Price     int64     `gorm:"column:price;not null"`
+	Channel   string    `gorm:"column:channel;not null"`
+	CreatedAt time.Time `gorm:"column:created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at"`
+}
+
+func (*TorrentBuyLog) TableName() string {
+	return "torrent_buy_logs"
+}

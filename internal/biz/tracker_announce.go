@@ -901,15 +901,46 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			constant.Setting_PaidTorrentEnabled
 
 		if flag { //redisLock
-			hasBuyCacheKey := cacheKeyContactWithColon(constant.CACHE_KEY_BOUGHT_USER_PREFIX, strconv.FormatInt(torrent.ID, 10))
+			hasBuyCacheKey := getTorrentBuyUserCacheKey(torrent.ID)
 
 			// hasBuy //consumeToBuyTorrent
-			_, err := o.cache.HGet(ctx, hasBuyCacheKey, strconv.FormatInt(user.Id, 10))
+			hasBuy, err := o.cache.HGetBool(ctx, hasBuyCacheKey, strconv.FormatInt(user.Id, 10))
 			if err != nil {
-				if errors.As(err, redis.Nil) { // 不存在 //todo
-
+				if !errors.As(err, redis.Nil) {
+					return resp, err
 				}
-				return resp, err
+				// 刷新缓存
+				lockKey := getTorrentBuyLoadUserLockKey(user.Id)
+				ok, _ := o.cache.Lock(ctx, lockKey, "1", 300*time.Millisecond) // todo 这里不会等待
+				if ok {
+					//executeCommand("torrent:load_bought_user $torrentid", "string", true, false);
+					err = o.getBuyLogs(ctx, torrent.ID)
+					if err != nil {
+						return resp, err
+					}
+				}
+				// note: 这里将原有string,改为hget
+				// $hasBuy = \Nexus\Database\NexusDB::remember(sprintf("user_has_buy_torrent:%s:%s", $userid, $torrentid), 86400*10, function () use($userid, $torrentid) {
+				// 	$exists = \App\Models\TorrentBuyLog::query()->where('uid', $userid)->where('torrent_id', $torrentid)->exists();
+				// 	return intval($exists);
+				// });
+				hasBuy, _ = o.cache.HGetBool(ctx, hasBuyCacheKey, strconv.FormatInt(user.Id, 10))
+			}
+
+			if !hasBuy {
+
+				lockKey := fmt.Sprintf("buying_torrent:%d", user.Id)
+				_, err = o.cache.Lock(ctx, lockKey, "1", 5*time.Second) //TODO 5s?  $lock = new \Nexus\Database\NexusLock("", 5);
+				if err != nil {
+					return resp, errors.New("buying torrent, wait!")
+				}
+
+				_, err := o.consumeToBuyTorrent(ctx, user.Id, torrent.ID, "Web")
+				if err != nil {
+					return resp, err
+				}
+				o.cache.HSet(ctx, hasBuyCacheKey, strconv.FormatInt(user.Id, 10), true)
+				//$lock->release();
 			}
 
 		}
@@ -1386,6 +1417,60 @@ func (o *TrackerAnnounceUsecase) cheaterCheck(ctx context.Context, user *model.U
 	return false, nil
 }
 
+// todo 购买?
+func (o *TrackerAnnounceUsecase) consumeToBuyTorrent(ctx context.Context, uid, torrentId int64, channel string) (bool, error) {
+
+	if constant.TaxFactor < 0 || constant.TaxFactor > 1 {
+		return false, errors.New(fmt.Sprintf("Invalid tax_factor: %f", constant.TaxFactor))
+	}
+
+	torrent, err := o.trepo.Get(ctx, torrentId)
+	if err != nil {
+		return false, err
+	}
+	requireBonus := torrent.Price
+
+	user, err := o.urepo.Get(ctx, uid)
+	if err != nil {
+		return false, err
+	}
+
+	// todo consumeUserBonus
+
+	o.trepo.CreateBuyLog(ctx, &model.TorrentBuyLog{
+		UID:       uid,
+		TorrentID: torrentId,
+		Price:     requireBonus,
+		Channel:   channel,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	})
+
+	increaseBonus := float64(requireBonus) * (1 - constant.TaxFactor)
+	ownner, err := o.urepo.Get(ctx, torrent.Owner)
+	if err != nil {
+		return false, err
+	}
+	if ownner.Id != 0 {
+		oldBonus := ownner.SeedBonus
+		ownner.SeedBonus += increaseBonus
+		o.urepo.Update(ctx, ownner)
+		o.urepo.CreateBonusLog(ctx, &model.BonusLog{
+			BusinessType:  constant.BUSINESS_TYPE_TORRENT_BE_DOWNLOADED,
+			UID:           uid,
+			OldTotalValue: oldBonus,
+			Value:         increaseBonus,
+			NewTotalValue: ownner.SeedBonus,
+			// 'comment' => sprintf('[%s] %s', BonusLogs::$businessTypes[$businessType]['text'], $comment),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		})
+
+	}
+
+	return true, nil
+}
+
 func (o *TrackerAnnounceUsecase) getDataTraffic(ctx context.Context, torrent *model.TorrentView, queries *AnnounceRequest, user *model.User, peer *model.PeerView, snatch *model.Snatched, promotionInfo map[string]int64) (map[string]int64, error) {
 
 	//!isset($user['__is_donor'] //return error
@@ -1605,6 +1690,22 @@ func Max(a, b int64) int64 {
 	return b
 }
 
+func (o *TrackerAnnounceUsecase) getBuyLogs(ctx context.Context, tid int64) error {
+	logs, err := o.trepo.GetBuyLogs(ctx, int64(tid))
+	if err != nil {
+		return err
+	}
+	hasBuyCacheKey := getTorrentBuyUserCacheKey(int64(tid))
+
+	for _, log := range logs {
+		o.cache.HSet(ctx, hasBuyCacheKey, strconv.FormatInt(int64(log.UID), 10), true)
+	}
+
+	o.cache.Expire(ctx, hasBuyCacheKey, time.Second*86400*30)
+
+	return nil
+}
+
 // todo
 func (o *TrackerAnnounceUsecase) getIncludeRateByTorrentMode(mode string) int64 {
 	return 1
@@ -1644,6 +1745,14 @@ func portBlacklisted(port uint16) bool {
 		return true
 	}
 	return false
+}
+
+func getTorrentBuyLoadUserLockKey(uid int64) string {
+	return fmt.Sprintf(constant.LOCK_KEY_LOAD_TORRENT_BOUGHT, uid)
+}
+
+func getTorrentBuyUserCacheKey(tid int64) string {
+	return fmt.Sprintf(constant.CACHE_KEY_BOUGHT_USER_PREFIX, tid)
 }
 
 func cacheKeyContactWithColon(key, body string) string {

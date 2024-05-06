@@ -64,3 +64,37 @@ func (o *Torrent) UpdateByMap(ctx context.Context, id int64, info map[string]int
 
 	return nil
 }
+
+func (o *Torrent) Get(ctx context.Context, id int64) (*model.Torrent, error) {
+	torrent := new(model.Torrent)
+	err := o.data.DB.WithContext(ctx).Where("id = ?", id).Find(torrent).Error
+
+	if err != nil {
+		return torrent, errors.Wrap(err, "Get")
+	}
+	return torrent, nil
+}
+
+func (o *Torrent) GetBuyLogs(ctx context.Context, torrentId int64) ([]*model.TorrentBuyLog, error) {
+	buyLogList := make([]*model.TorrentBuyLog, 0)
+	var start = 0
+
+	for {
+		buyLogListSub := make([]*model.TorrentBuyLog, 0)
+		err := o.data.DB.Model(new(model.TorrentBuyLog)).Where("torrent_id = ?", torrentId).Where("id > ?", start).Order("id").Limit(100).Find(&buyLogListSub).Error
+		if err != nil {
+			return nil, errors.Wrap(err, "GetBuyLogs")
+		}
+		if len(buyLogListSub) == 0 {
+			break
+		}
+		buyLogList = append(buyLogList, buyLogListSub...)
+		start = int(buyLogListSub[len(buyLogListSub)-1].ID)
+	}
+
+	return buyLogList, nil
+}
+
+func (o *Torrent) CreateBuyLog(ctx context.Context, log *model.TorrentBuyLog) error {
+	return o.data.DB.WithContext(ctx).Create(log).Error
+}

@@ -1,6 +1,7 @@
 package constant
 
-const CACHE_KEY_BOUGHT_USER_PREFIX = "torrent_purchasers"
+const CACHE_KEY_BOUGHT_USER_PREFIX = "torrent_purchasers:%d"
+const LOCK_KEY_LOAD_TORRENT_BOUGHT = "load_torrent_bought_user:%d"
 
 const CACHE_KEY_PIECES_HASH = "torrent_pieces_hash"
 

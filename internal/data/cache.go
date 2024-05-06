@@ -67,6 +67,19 @@ func (o *Cache) HGet(ctx context.Context, key, field string) (string, error) {
 	}
 	return result, nil
 }
+func (o *Cache) HGetBool(ctx context.Context, key, field string) (bool, error) {
+	result, err := o.data.redisCli.HGet(ctx, key, field).Bool()
+	if err != nil {
+		return false, errors.Wrap(err, "HGetBool")
+	}
+	return result, nil
+}
+
+func (o *Cache) Expire(ctx context.Context, key string, dur time.Duration) bool {
+	result := o.data.redisCli.Expire(ctx, key, dur).Val()
+
+	return result
+}
 
 func (o *Cache) HSet(ctx context.Context, key, field string, value interface{}) (int64, error) {
 	result, err := o.data.redisCli.HSet(ctx, key, field, value).Result()
