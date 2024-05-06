@@ -129,7 +129,7 @@ func (o *announceParamsChecker) Do(ctx http.Context) (*AnnounceRequest, error) {
 	return o.AReq, o.Err
 }
 
-// TODO checkclient
+// checkclient
 func (o *TrackerAnnounceUsecase) CheckClient(ctx http.Context, in *AnnounceRequest) error {
 	allows := make([]*model.AgentAllowedFamily, 0)
 
@@ -779,8 +779,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		return resp, errors.New(fmt.Sprintf("There is a minimum announce time: %d wait", announceWait))
 	}
 
-	var isIPSeedBoxInt int8 // TODO 盒子判断
-
+	var isIPSeedBoxInt int8 // 盒子判断
 	if constant.Setting_IsSeedBoxRuleEnabled {
 
 		var isIPSeedBox bool
@@ -806,12 +805,12 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 
 	var snatchInfo *model.Snatched
 	var upthis, trueUpthis, downthis, trueDownthis int64
-	var announcetime int64
+	//var announcetime int64 //无用
 
 	var dataTraffic = make(map[string]int64, 0)
 
 	if selfPeer.ID == 0 {
-		sameIPRecord, err := o.peerpo.GetPeer(ctx, torrent.ID, user.Id, ip)
+		sameIPRecord, err := o.peerpo.GetPeer(ctx, torrent.ID, user.Id, ip, "")
 		if err == nil && sameIPRecord.ID != 0 && seeder == "yes" {
 			return resp, errors.New("You cannot seed the same torrent in the same location from more than 1 client.")
 		}
@@ -846,11 +845,8 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 
 			var gigs = user.Downloaded / (1024 * 1024 * 1024)
 
-			var waitsystem string // yes or no //TODO GetConfig
-			var maxDlsSystem string
 			var wait int64
-
-			if waitsystem == "yes" {
+			if constant.WaitSystem == "yes" {
 				if gigs > 10 {
 					if ratio < 0.4 {
 						wait = 24
@@ -871,7 +867,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 				}
 			}
 			var max int64
-			if maxDlsSystem == "yes" {
+			if constant.MaxDlSystem == "yes" {
 				if gigs > 10 {
 					if ratio < 0.5 {
 						max = 1
@@ -910,7 +906,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			// hasBuy //consumeToBuyTorrent
 			_, err := o.cache.HGet(ctx, hasBuyCacheKey, strconv.FormatInt(user.Id, 10))
 			if err != nil {
-				if errors.As(err, redis.Nil) { // 不存在
+				if errors.As(err, redis.Nil) { // 不存在 //todo
 
 				}
 				return resp, err
@@ -924,15 +920,14 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		downthis = Max(0, int64(in.Downloaded-uint(selfPeer.Downloaded)))
 		trueDownthis = downthis
 
-		var seedTime int64
-		var leechTime int64 // TODO: where can find
-
-		o.log.Warn(announcetime)
-		if selfPeer.Seeder == "yes" {
-			announcetime = selfPeer.Announcetime + seedTime
-		} else {
-			announcetime = selfPeer.Announcetime + leechTime
-		}
+		// var seedTime int64
+		// var leechTime int64
+		// if selfPeer.Seeder == "yes" {
+		// 	announcetime = selfPeer.Announcetime + seedTime
+		// } else {
+		// 	announcetime = selfPeer.Announcetime + leechTime
+		// }
+		//o.log.Warn(announcetime) //TODO snatch表无此字段,就不更新了
 
 		if selfPeer.Announcetime > 0 && constant.Setting_IsSeedBoxRuleEnabled &&
 			!(user.Class >= constant.UC_VIP || isDonor) && isIPSeedBoxInt == 1 {
@@ -943,7 +938,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 				//updateDownloadPrivileges()
 				user.UploadPos = "no"
 				o.urepo.Update(ctx, user)
-				// TODO clearCache
+				o.delCacheUserKeys(ctx, user.Id, passkey)
 				return
 			}
 		}
@@ -966,12 +961,13 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		}
 		if !isCheater && (trueUpthis > 0 || trueDownthis > 0) {
 			o.log.Info(snatchInfo)
-			//todo $_GET
 			// $dataTraffic = getDataTraffic($torrent, $_GET, $az, $self, $snatchInfo, apply_filter('torrent_promotion', $torrent));
 			dataTraffic, err = o.getDataTraffic(ctx, torrent, in, user, selfPeer, snatchInfo, nil)
 			if err != nil {
 				return
 			}
+
+			// 在下面实现
 			// $USERUPDATESET[] = "uploaded = uploaded + " . $dataTraffic['uploaded_increment_for_user'];
 			// $USERUPDATESET[] = "downloaded = downloaded + " . $dataTraffic['downloaded_increment_for_user'];
 		}
@@ -980,16 +976,15 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	// set non-type event
 	var hasChangeSeederLeecher bool
 	var times_completed_flag bool //标识该peer是否已经完成
-	o.log.Warn(hasChangeSeederLeecher)
 	var event string
 	if selfPeer.ID != 0 && in.Event == "stopped" {
 		affect, err := o.peerpo.Delete(ctx, selfPeer.ID)
 		if err != nil {
 			o.log.Error(err)
-		} else { // todo updateSnatched
+		} else {
 			if affect != 0 && snatchInfo != nil && snatchInfo.ID != 0 {
 				hasChangeSeederLeecher = true
-				err = o.snatch.UpdateSnatchedInfo(ctx, snatchInfo.ID, snatchInfo.Uploaded+trueUpthis, snatchInfo.Downloaded+trueDownthis, int64(in.Left))
+				err = o.snatch.UpdateSnatchedInfo(ctx, snatchInfo.ID, trueUpthis, trueDownthis, int64(in.Left))
 				if err != nil {
 					o.log.Errorw("err", err)
 				}
@@ -1015,9 +1010,9 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			updateMap["completedat"] = time.Now().Format(time.DateOnly)
 			_, err := o.peerpo.Update(ctx, selfPeer.ID, updateMap)
 			if err != nil {
-				o.log.Error("peerpo", err) //todo
+				o.log.Error("peerpo", err)
 			}
-			times_completed_flag = true //todo 这里原来用的 $updateset[] = "times_completed = times_completed + 1";
+			times_completed_flag = true
 			hasChangeSeederLeecher = true
 
 			if err == nil {
@@ -1028,10 +1023,9 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 				if snatchInfo != nil && snatchInfo.ID != 0 {
 					err := o.snatch.UpdateSnatchedInfo(ctx, snatchInfo.ID, trueUpthis, trueDownthis, int64(in.Left))
 					if err != nil {
-						o.log.Error("UpdateSnatchedInfo", err) //todo
-
+						o.log.Error("UpdateSnatchedInfo", err)
 					}
-					//do_action('snatched_saved', $torrent, $snatchInfo); //todo
+					//do_action('snatched_saved', $torrent, $snatchInfo); //todo 这里没找到php function在哪里 就没实现
 				}
 			}
 		}
@@ -1039,72 +1033,77 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	} else {
 
 		if in.Event != "stopped" {
-
-			//todo connectable 判断 ==
-			var connectable = "false"
-
-			// 插入peer
-			newPeer := &model.Peer{
-				Torrent:     torrent.ID,
-				PeerID:      in.PeerID, //todo 验证
-				IP:          ip,
-				Port:        int64(in.Port),
-				Uploaded:    int64(in.Uploaded),
-				Downloaded:  int64(in.Downloaded),
-				ToGo:        int64(in.Left),
-				Seeder:      seeder,
-				LastAction:  time.Now(),
-				PrevAction:  time.Now(),
-				Connectable: connectable,
-				UserID:      user.Id,
-				Agent:       in.UA,
-				Passkey:     passkey,
-				IPv4:        ipv4,
-				IPv6:        ipv6,
-				IsSeedBox:   isIPSeedBoxInt,
-			}
-
-			err = o.peerpo.Insert(ctx, newPeer)
-			if err != nil {
-				return resp, err
-			}
-
-			hasChangeSeederLeecher = true
-			//$checkSnatchedRes = mysql_fetch_assoc(sql_query("SELECT id FROM snatched WHERE torrentid = $torrentid AND userid = $userid limit 1"));
-			snatchInfo, err := o.snatch.GetSnatched(ctx, torrent.ID, user.Id)
+			peer, err := o.peerpo.GetPeer(ctx, torrent.ID, user.Id, "", in.PeerID)
 			if err != nil && !errors.As(err, gorm.ErrRecordNotFound) {
 				return resp, err
 			}
+			if peer == nil || peer.ID == 0 {
 
-			// 插入
-			if snatchInfo == nil || snatchInfo.ID == 0 {
-				err = o.snatch.Insert(ctx, &model.Snatched{
-					Torrentid:  torrent.ID,
-					UserID:     user.Id,
-					IP:         ip,
-					Port:       in.Port,
-					Uploaded:   int64(in.Uploaded),
-					Downloaded: int64(in.Downloaded),
-					ToGo:       int64(in.Left),
-					LastAction: time.Now(),
-					StartAt:    time.Now(),
-				})
+				//TODO connectable 判断 ==  这个php源码会建立一条socket连接,但实际查询PeerList时没任何作用,暂不实现
+				var connectable = "false"
+
+				// 插入peer
+				newPeer := &model.Peer{
+					Torrent:     torrent.ID,
+					PeerID:      in.PeerID, //todo 验证
+					IP:          ip,
+					Port:        int64(in.Port),
+					Uploaded:    int64(in.Uploaded),
+					Downloaded:  int64(in.Downloaded),
+					ToGo:        int64(in.Left),
+					Seeder:      seeder,
+					LastAction:  time.Now(),
+					PrevAction:  time.Now(),
+					Connectable: connectable,
+					UserID:      user.Id,
+					Agent:       in.UA,
+					Passkey:     passkey,
+					IPv4:        ipv4,
+					IPv6:        ipv6,
+					IsSeedBox:   isIPSeedBoxInt,
+				}
+
+				err = o.peerpo.Insert(ctx, newPeer)
 				if err != nil {
 					return resp, err
 				}
-			} else {
-				//更新
-				snatchMap := make(map[string]interface{}, 0)
-				snatchMap["to_go"] = in.Left
-				snatchMap["last_action"] = time.Now()
-				err = o.snatch.UpdateWithMap(ctx, snatchInfo.ID, snatchMap)
-				if err != nil {
+
+				hasChangeSeederLeecher = true
+				//$checkSnatchedRes = mysql_fetch_assoc(sql_query("SELECT id FROM snatched WHERE torrentid = $torrentid AND userid = $userid limit 1"));
+				snatchInfo, err := o.snatch.GetSnatched(ctx, torrent.ID, user.Id)
+				if err != nil && !errors.As(err, gorm.ErrRecordNotFound) {
 					return resp, err
 				}
+
+				// 插入
+				if snatchInfo == nil || snatchInfo.ID == 0 {
+					err = o.snatch.Insert(ctx, &model.Snatched{
+						Torrentid:  torrent.ID,
+						UserID:     user.Id,
+						IP:         ip,
+						Port:       in.Port,
+						Uploaded:   int64(in.Uploaded),
+						Downloaded: int64(in.Downloaded),
+						ToGo:       int64(in.Left),
+						LastAction: time.Now(),
+						StartAt:    time.Now(),
+					})
+					if err != nil {
+						return resp, err
+					}
+				} else {
+					//更新
+					snatchMap := make(map[string]interface{}, 0)
+					snatchMap["to_go"] = in.Left
+					snatchMap["last_action"] = time.Now()
+					err = o.snatch.UpdateWithMap(ctx, snatchInfo.ID, snatchMap)
+					if err != nil {
+						return resp, err
+					}
+				}
+
 			}
-
 		}
-
 	}
 
 	//handle hr
@@ -1186,21 +1185,42 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		clientSelect = clientFamilyId
 	}
 
-	//TODO更新用户上传下载信息
+	//更新用户上传下载信息
 	// VIP do not calculate downloaded
 	if user.Class == constant.UC_VIP {
-
+		// delete带download的数据 如 downloaded_increment_for_user
 	}
 
 	// 详细数据见 nexsusPHP中USERUPDATESET
 	user.Uploaded += int64(dataTraffic["uploaded_increment_for_user"])
-	user.Downloaded += int64(dataTraffic["downloaded_increment_for_user"])
+	if user.Class == constant.UC_VIP {
+		// VIP do not calculate downloaded
+	} else {
+		user.Downloaded += int64(dataTraffic["downloaded_increment_for_user"])
+	}
 	if clientSelect != 0 {
 		user.ClientSelect = clientSelect
 	}
 	err = o.urepo.Update(ctx, user)
 
 	return
+}
+
+func (o *TrackerAnnounceUsecase) delCacheUserKeys(ctx context.Context, uid int64, passkey string) {
+
+	delKeys := []string{
+		fmt.Sprintf("user_%d_content", uid),
+		fmt.Sprintf("user_%d_roles", uid),
+		fmt.Sprintf("announce_user_passkey__%d", uid),
+		fmt.Sprintf("nexus_direct_permissions_%d", uid),
+		fmt.Sprintf("user_role_ids:%d", uid),
+		fmt.Sprintf("direct_permissions:%d", uid),
+	}
+	if passkey != "" {
+		delKeys = append(delKeys, fmt.Sprintf("user_passkey_%s_content", passkey))
+	}
+
+	o.cache.Del(ctx, delKeys)
 }
 
 func (o *TrackerAnnounceUsecase) cheaterCheck(ctx context.Context, user *model.User, torrentid, uploaded, downloaded, anctime, seeders, leechers int64) (bool, error) {
@@ -1438,7 +1458,7 @@ func (o *TrackerAnnounceUsecase) getDataTraffic(ctx context.Context, torrent *mo
 		if err != nil {
 			return nil, err
 		}
-		if is { //todo //queries["ip"]
+		if is {
 			if constant.IsSeedBoxNoPromotion {
 				uploadedIncrementForUser = realUploaded
 				downloadedIncrementForUser = realDownloaded
@@ -1489,13 +1509,10 @@ func (o *TrackerAnnounceUsecase) isIPSeedBox(ctx context.Context, ip string, uid
 		return false, nil
 	}
 
-	ipblock := net.ParseIP(ip)
-	if ipblock == nil {
-		return false, errors.Wrap(err, "ParseIp: "+ip)
+	ipNumeric, ipVersion, err := ipNumericAndVersion(ip) //这里ipv6与php计算有出入
+	if err != nil {
+		return false, err
 	}
-
-	ipNumeric := "123" //TODO
-	ipVersion := int64(4)
 
 	seedBoxQ := &model.SeedBoxRecord{
 		Status:         constant.SEED_BOX_STATUS_ALLOWED,
@@ -1548,6 +1565,37 @@ func (o *TrackerAnnounceUsecase) isIPSeedBox(ctx context.Context, ip string, uid
 
 func getIpSeedBoxCacheKey(ip string, uid int64) string {
 	return fmt.Sprintf(constant.CacheKeyIpSeedBox, ip, uid)
+}
+
+func ipNumericAndVersion(ipStr string) (string, int64, error) {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return "", 0, fmt.Errorf("invalid IP address: %s", ipStr)
+	}
+
+	ipv4 := ip.To4()
+	if ipv4 != nil {
+		return strconv.FormatUint(uint64(binary.BigEndian.Uint32(ipv4)), 10), 4, nil
+	}
+
+	ipv6 := ip.To16()
+	if ipv6 != nil {
+		high := binary.BigEndian.Uint64(ipv6[:8])
+
+		low := binary.BigEndian.Uint64(ipv6[8:])
+		lowStr := strconv.FormatUint(low, 16)
+		// 补齐至16位
+		need := 16 - len(lowStr)
+		add := ""
+		for i := 0; i < need; i++ {
+			add += "0"
+		}
+
+		return strconv.FormatUint(high, 16) + add + lowStr, 6, nil
+	}
+
+	return "", 0, errors.New("err format ip: " + ipStr)
+
 }
 
 func Max(a, b int64) int64 {

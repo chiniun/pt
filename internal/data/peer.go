@@ -54,11 +54,16 @@ func (o *Peer) GetPeerView(ctx context.Context, tid, uid int64, peer_id string) 
 
 }
 
-func (o *Peer) GetPeer(ctx context.Context, tid, uid int64, ip string) (*model.Peer, error) {
+func (o *Peer) GetPeer(ctx context.Context, tid, uid int64, ip, peerId string) (*model.Peer, error) {
 	peer := new(model.Peer)
-
-	err := o.data.DB.Model(new(model.Peer)).Where("torrent = ?", tid).
-		Where("user_id = ?", uid).Where("ip = ?", ip).First(peer).Error
+	session := o.data.DB.Model(new(model.Peer)).Where("torrent = ?", tid).Where("user_id = ?", uid)
+	if ip != "" {
+		session = session.Where("ip = ?", ip)
+	}
+	if peerId != "" {
+		session = session.Where("peer_id = ?", peerId)
+	}
+	err := session.First(peer).Error
 	if err != nil {
 		return nil, errors.Wrap(err, "GetPeer")
 	}
@@ -94,7 +99,6 @@ func (o *Peer) Delete(ctx context.Context, id int64) (int64, error) {
 }
 
 func (o *Peer) Update(ctx context.Context, id int64, updateMap map[string]interface{}) (*model.Peer, error) {
-	
 
 	err := o.data.DB.Model(new(model.Peer)).Where("id = ?", id).UpdateColumns(updateMap).Error
 

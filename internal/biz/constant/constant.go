@@ -49,14 +49,17 @@ const (
 )
 
 type TrackerState int8
-
 const (
 	Seeder TrackerState = iota + 1
 	Leecher
 )
 
 const (
-	//欺骗校验
+	WaitSystem = "Yes"
+	MaxDlSystem = "Yes"
+)
+
+const (
 	CheateredSecurity     = 2 //cheaterdet_security //todo
 	TorrentUploaderdouble = 2 //上传双倍 //todo
 
@@ -68,6 +71,7 @@ const (
 	TrafficCntPerMB = 1048576
 	TrafficCnt100KB = 102400
 )
+
 
 var (
 	TORRENT_PROMOTION_GLOBAL = TORRENT_PROMOTION_NORMAL //todo redis 刷新

@@ -50,6 +50,16 @@ func (o *Cache) Set(ctx context.Context, key string, value interface{}, sec time
 
 }
 
+func (o *Cache) Del(ctx context.Context, keys []string) (int64, error) {
+
+	count, err := o.data.redisCli.Del(ctx, keys...).Result()
+	if err != nil {
+		return 0, kerr.New(500, "del: ", err.Error())
+	}
+	return count, nil
+
+}
+
 func (o *Cache) HGet(ctx context.Context, key, field string) (string, error) {
 	result, err := o.data.redisCli.HGet(ctx, key, field).Result()
 	if err != nil {
