@@ -1,3 +1,12 @@
+#命令
+
+```
+   根目录下执行:  make all 
+   只编译: make build
+   本地运行:  make local 
+```
+
+
 # Kratos Project Template
 
 ## Install Kratos
