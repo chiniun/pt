@@ -914,7 +914,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 				ok, _ := o.cache.Lock(ctx, lockKey, "1", 300*time.Millisecond) // todo 这里不会等待
 				if ok {
 					//executeCommand("torrent:load_bought_user $torrentid", "string", true, false);
-					err = o.getBuyLogs(ctx, torrent.ID)
+					err = o.refreshHasBuyLogs(ctx, torrent.ID)
 					if err != nil {
 						return resp, err
 					}
@@ -969,7 +969,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 				//updateDownloadPrivileges()
 				user.UploadPos = "no"
 				o.urepo.Update(ctx, user)
-				o.delCacheUserKeys(ctx, user.Id, passkey)
+				o.clearUserCache(ctx, user.Id, passkey)
 				return
 			}
 		}
@@ -1056,7 +1056,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 					if err != nil {
 						o.log.Error("UpdateSnatchedInfo", err)
 					}
-					//do_action('snatched_saved', $torrent, $snatchInfo); //todo 这里没找到php function在哪里 就没实现
+					//do_action('snatched_saved', $torrent, $snatchInfo); //TODO 这里没找到php function在哪里 就没实现
 				}
 			}
 		}
@@ -1076,7 +1076,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 				// 插入peer
 				newPeer := &model.Peer{
 					Torrent:     torrent.ID,
-					PeerID:      in.PeerID, //todo 验证
+					PeerID:      in.PeerID,
 					IP:          ip,
 					Port:        int64(in.Port),
 					Uploaded:    int64(in.Uploaded),
@@ -1165,7 +1165,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 						o.log.Error("snatchInfo", err)
 						return resp, err
 					}
-					requiredDownloaded := torrent.Size * includeRate
+					requiredDownloaded := int64(float64(torrent.Size) * includeRate)
 					if snatchInfo.Downloaded >= requiredDownloaded {
 						hr := &model.HitRuns{
 							UID:        user.Id,
@@ -1237,7 +1237,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	return
 }
 
-func (o *TrackerAnnounceUsecase) delCacheUserKeys(ctx context.Context, uid int64, passkey string) {
+func (o *TrackerAnnounceUsecase) clearUserCache(ctx context.Context, uid int64, passkey string) {
 
 	delKeys := []string{
 		fmt.Sprintf("user_%d_content", uid),
@@ -1249,6 +1249,15 @@ func (o *TrackerAnnounceUsecase) delCacheUserKeys(ctx context.Context, uid int64
 	}
 	if passkey != "" {
 		delKeys = append(delKeys, fmt.Sprintf("user_passkey_%s_content", passkey))
+	}
+
+	o.cache.Del(ctx, delKeys)
+}
+
+func (o *TrackerAnnounceUsecase) clearInboxCountCache(ctx context.Context, uid int64) {
+	delKeys := []string{
+		fmt.Sprintf("user_%d_inbox_count", uid),
+		fmt.Sprintf("user_%d_unread_message_count", uid),
 	}
 
 	o.cache.Del(ctx, delKeys)
@@ -1417,7 +1426,6 @@ func (o *TrackerAnnounceUsecase) cheaterCheck(ctx context.Context, user *model.U
 	return false, nil
 }
 
-// todo 购买?
 func (o *TrackerAnnounceUsecase) consumeToBuyTorrent(ctx context.Context, uid, torrentId int64, channel string) (bool, error) {
 
 	if constant.TaxFactor < 0 || constant.TaxFactor > 1 {
@@ -1435,8 +1443,10 @@ func (o *TrackerAnnounceUsecase) consumeToBuyTorrent(ctx context.Context, uid, t
 		return false, err
 	}
 
-	// todo consumeUserBonus
-
+	err = o.consumeUserBonus(ctx, user, requireBonus, constant.BUSINESS_TYPE_BUY_TORRENT)
+	if err != nil {
+		return false, err
+	}
 	o.trepo.CreateBuyLog(ctx, &model.TorrentBuyLog{
 		UID:       uid,
 		TorrentID: torrentId,
@@ -1467,8 +1477,29 @@ func (o *TrackerAnnounceUsecase) consumeToBuyTorrent(ctx context.Context, uid, t
 		})
 
 	}
-
+	//TODO NOTE 未实现创建消息提醒: buyTorrentSuccessMessage
+	//o.clearInboxCountCache(ctx, ownner.Id)
 	return true, nil
+}
+
+func (o *TrackerAnnounceUsecase) consumeUserBonus(ctx context.Context, user *model.User, requireBonus int64, bussinessType int64) error {
+	if requireBonus <= 0 {
+		return nil
+	}
+
+	if user.SeedBonus < float64(requireBonus) {
+		return errors.New("User bonus not enough.")
+	}
+
+	newUserBonus := user.SeedBonus - float64(requireBonus)
+	user.SeedBonus = newUserBonus
+	err := o.urepo.Update(ctx, user) // 更新用户信息
+	if err != nil {
+		return err
+	}
+
+	o.clearUserCache(ctx, user.Id, user.Passkey)
+	return nil
 }
 
 func (o *TrackerAnnounceUsecase) getDataTraffic(ctx context.Context, torrent *model.TorrentView, queries *AnnounceRequest, user *model.User, peer *model.PeerView, snatch *model.Snatched, promotionInfo map[string]int64) (map[string]int64, error) {
@@ -1690,7 +1721,7 @@ func Max(a, b int64) int64 {
 	return b
 }
 
-func (o *TrackerAnnounceUsecase) getBuyLogs(ctx context.Context, tid int64) error {
+func (o *TrackerAnnounceUsecase) refreshHasBuyLogs(ctx context.Context, tid int64) error {
 	logs, err := o.trepo.GetBuyLogs(ctx, int64(tid))
 	if err != nil {
 		return err
@@ -1707,7 +1738,7 @@ func (o *TrackerAnnounceUsecase) getBuyLogs(ctx context.Context, tid int64) erro
 }
 
 // todo
-func (o *TrackerAnnounceUsecase) getIncludeRateByTorrentMode(mode string) int64 {
+func (o *TrackerAnnounceUsecase) getIncludeRateByTorrentMode(mode string) float64 {
 	return 1
 }
 

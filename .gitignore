@@ -41,3 +41,5 @@ bin/
 
 
 /configs/config_test.yaml
+
+.zed/
