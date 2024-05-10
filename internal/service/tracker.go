@@ -33,8 +33,8 @@ func (s *TrackerService) AppendToServer(srv *http.Server) {
 	router := srv.Route("/pt/")
 
 	// 授权
-	router.POST("/announce", s.Announce)
-	router.POST("/scrape", s.Scrape)
+	router.GET("/announce", s.Announce)
+	router.GET("/scrape", s.Scrape)
 
 }
 
