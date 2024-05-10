@@ -111,22 +111,25 @@ var (
 
 type announceParamsChecker struct {
 	AReq *AnnounceRequest
-	Err  error
 }
 
 func NewAnnounceParamsChecker() *announceParamsChecker {
 
 	return &announceParamsChecker{
 		AReq: &AnnounceRequest{},
-		Err:  nil,
 	}
 }
 
 func (o *announceParamsChecker) Do(ctx http.Context) (*AnnounceRequest, error) {
-
-	o.CheckUserAgent(ctx)
-	o.Bind(ctx)
-	return o.AReq, o.Err
+	err := o.CheckUserAgent(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = o.Bind(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return o.AReq, nil
 }
 
 // checkclient
@@ -319,10 +322,7 @@ func parseInt(s string, base int) int {
 	}
 	return int(i)
 }
-func (o *announceParamsChecker) CheckUserAgent(ctx http.Context) {
-	if o.Err != nil {
-		return
-	}
+func (o *announceParamsChecker) CheckUserAgent(ctx http.Context) error {
 
 	req := new(AnnounceRequest)
 	ua := ctx.Header().Get("User-Agent")
@@ -337,49 +337,42 @@ func (o *announceParamsChecker) CheckUserAgent(ctx http.Context) {
 	for _, pattern := range patterns {
 		match, err := regexp.MatchString(pattern, ua)
 		if err != nil {
-			o.Err = errors.WithStack(err)
-			break
+			return errors.Wrap(err, "MatchString")
 		}
 
 		if match {
-			o.Err = ErrAgentBlock
-			break
+			return errors.New(ErrAgentBlock.Error())
 		}
 	}
 
-	return
+	return nil
 }
 
-func (o *announceParamsChecker) Bind(ctx http.Context) {
-	if o.Err != nil {
-		return
-	}
+func (o *announceParamsChecker) Bind(ctx http.Context) error {
 
 	query := ctx.Request().URL.RawQuery
 
 	err := ctx.BindQuery(o.AReq)
 	if err != nil {
-		o.Err = err
-		return
+		return errors.Wrap(err, "BindQuery")
 	}
 	o.AReq.RawQuery = query
 
 	if len(o.AReq.InfoHash) != 20 {
-		o.Err = ErrParamsInvalidInfoHash
+		return errors.New(ErrParamsInvalidInfoHash.Error())
 	}
 
 	if o.AReq.Passkey != "" && len(o.AReq.Passkey) != 32 {
-		o.Err = ErrParmsInvalidPassKey
-		return
+		return errors.New(ErrParmsInvalidPassKey.Error())
 	}
 
 	if o.AReq.Authkey != "" {
 		parts := strings.Split(o.AReq.Authkey, "|")
 		if len(parts) != 3 {
-			o.Err = ErrParamsInvalidAuthKey
-			return
+			return errors.New(ErrParamsInvalidAuthKey.Error())
 		}
 	}
+	return nil
 }
 
 func (o *TrackerAnnounceUsecase) AnnounceParams(ctx http.Context) (*AnnounceRequest, error) {
