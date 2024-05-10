@@ -357,7 +357,7 @@ func (o *announceParamsChecker) Bind(ctx http.Context) {
 
 	query := ctx.Request().URL.RawQuery
 
-	err := ctx.Bind(o.AReq)
+	err := ctx.BindQuery(o.AReq)
 	if err != nil {
 		o.Err = err
 		return
