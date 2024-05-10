@@ -134,7 +134,7 @@ func (o *TrackerAnnounceUsecase) CheckClient(ctx http.Context, in *AnnounceReque
 	allows := make([]*model.AgentAllowedFamily, 0)
 
 	allowStr, err := o.cache.Get(ctx, constant.CacheKeyAgentAllowKey)
-	if err != nil && err != redis.Nil {
+	if err != nil {
 		return errors.Wrap(err, "Get")
 	}
 
@@ -209,7 +209,7 @@ func (o *TrackerAnnounceUsecase) CheckClient(ctx http.Context, in *AnnounceReque
 		allowDenys := make([]*model.AgentAllowedException, 0)
 
 		allowStr, err := o.cache.Get(ctx, constant.CacheKeyAgentDenyKey)
-		if err != nil && err != redis.Nil {
+		if err != nil {
 			return errors.Wrap(err, "Get")
 		}
 
@@ -605,9 +605,11 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	// checkTorrent
 	toData, err := o.cache.Get(ctx, strFmtWithInsert(constant.CacheKey_TorrentHashkeyContent, infoHash))
 	if err != nil {
-		if !errors.As(err, redis.Nil) {
-			return resp, err
-		}
+		return resp, err
+	}
+	// 缓存没有获取到，查询数据库
+	if len(toData) == 0 {
+		log.Infof("Torrent缓存 : %s 没有获取到，查询数据库", strFmtWithInsert(constant.CacheKey_TorrentHashkeyContent, infoHash))
 		// nil  查询数据库
 		torrent, err := o.trepo.FindByHash(ctx, infoHash)
 		if err != nil { //torrent不存在
@@ -632,8 +634,9 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		tobyte, _ := json.Marshal(torrent)
 		toData = string(tobyte)
 		o.cache.Set(ctx, strFmtWithInsert(constant.CacheKey_TorrentHashkeyContent, infoHash), toData, 350)
+	} else {
+		log.Infof("Torrent缓存命中 : %s", strFmtWithInsert(constant.CacheKey_TorrentHashkeyContent, infoHash))
 	}
-
 	torrent := new(model.TorrentView)
 	err = json.Unmarshal([]byte(toData), torrent)
 	if err != nil {
@@ -1144,7 +1147,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		if ConfHrMod == constant.HR_MODE_GLOBAL || (ConfHrMod == constant.HR_MODE_MANUAL && torrent.HR == constant.HR_TORRENT_YES) {
 			hrCacheKey := getCacheKeyHR(user.Id, torrent.ID) //todo 时间够了需要删除hr状态
 			hrCacheResult, err := o.cache.Get(ctx, hrCacheKey)
-			if err != nil && err != redis.Nil {
+			if err != nil {
 				return resp, err
 			}
 			hrCacheNotExists := len(hrCacheResult) == 0

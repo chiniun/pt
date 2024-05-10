@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"github.com/go-redis/redis/v8"
 
 	"time"
 
@@ -34,7 +35,8 @@ func (o *Cache) Lock(ctx context.Context, lock string, value interface{}, sec ti
 
 func (o *Cache) Get(ctx context.Context, key string) (string, error) {
 	result, err := o.data.redisCli.Get(ctx, key).Result()
-	if err != nil {
+	if err != nil && !errors.Is(err, redis.Nil) {
+		log.Error("redis 获取key异常", "key : ", key, "error : ", err)
 		return "", errors.Wrap(err, "Get")
 	}
 	return result, nil
