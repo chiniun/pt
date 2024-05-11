@@ -509,19 +509,20 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	}
 
 	//dbconn_announce
-
-	//check authkey //todo authKey not exist
-	user, err := o.urepo.GetByAuthkey(ctx, authkey)
-	if err != nil {
-		key := cacheKeyLinkByColon(constant.CacheKey_AuthKeyInvalidKey, authkey)
-		_, errLock := o.cache.Lock(ctx, key, 24*3600*1000)
-		if errLock != nil {
-			return resp, errLock
+	var user *model.User
+	if authkey != "" {
+		//check authkey //todo authKey not exist
+		user, err = o.urepo.GetByAuthkey(ctx, authkey)
+		if err != nil {
+			key := cacheKeyLinkByColon(constant.CacheKey_AuthKeyInvalidKey, authkey)
+			_, errLock := o.cache.Lock(ctx, key, 24*3600*1000)
+			if errLock != nil {
+				return resp, errLock
+			}
+			return
 		}
-		return
+		passkey = user.Passkey //todo 这里会有全局passkey赋值
 	}
-	passkey = user.Passkey //todo 这里会有全局passkey赋值
-
 	var compact int //是否压缩
 	ip := in.IP
 	if in.Port > 0xffff {
