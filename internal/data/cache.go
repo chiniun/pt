@@ -2,13 +2,13 @@ package data
 
 import (
 	"context"
-	"github.com/go-redis/redis/v8"
-
 	"time"
 
+	"github.com/bsm/redislock"
 	kerr "github.com/go-kratos/kratos/v2/errors"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/pkg/errors"
+	"github.com/redis/go-redis/v9"
 )
 
 type Cache struct {
@@ -23,14 +23,25 @@ func NewCache(data *Data, logger log.Logger) *Cache {
 	}
 }
 
-func (o *Cache) Lock(ctx context.Context, lock string, value interface{}, sec time.Duration) (bool, error) {
+func (o *Cache) Lock(ctx context.Context, lock string, sec time.Duration) (bool, error) {
 
-	setResult, err := o.data.redisCli.SetNX(ctx, lock, value, sec*time.Second).Result()
+	setResult, err := o.data.redisCli.SetNX(ctx, lock, "1", sec*time.Millisecond).Result()
 	if err != nil {
 		return true, errors.Wrap(err, "Lock")
 	}
 
 	return setResult, nil
+}
+
+// ObtainLock
+func (o *Cache) ObtainLock(ctx context.Context, lockKey string, sec time.Duration) (*redislock.Lock, error) {
+
+	lock, err := o.data.locker.Obtain(ctx, lockKey, sec*time.Millisecond, nil)
+	if err == redislock.ErrNotObtained {
+		return nil, errors.Wrapf(err, "ObtainLockKey:%s", lockKey)
+	}
+
+	return lock, nil
 }
 
 func (o *Cache) Get(ctx context.Context, key string) (string, error) {

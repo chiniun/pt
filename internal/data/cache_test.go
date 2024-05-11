@@ -28,14 +28,14 @@ func TestCache_HSet(t *testing.T) {
 
 func TestCache_Lock(t *testing.T) {
 
-	data, err := cache.Lock(context.TODO(), "testlockkey", "xx", 5)
+	data, err := cache.Lock(context.TODO(), "testlockkey", 5*1000)
 	if err != nil {
 		fmt.Printf("%#+v\n", err)
 	}
 	fmt.Println(data)
 
 	go func() {
-		data, err := cache.Lock(context.TODO(), "testlockkey", "xx", 5)
+		data, err := cache.Lock(context.TODO(), "testlockkey", 5*1000)
 		if err != nil {
 			fmt.Printf("%#+v\n", err)
 		} else {

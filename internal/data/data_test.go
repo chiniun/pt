@@ -37,19 +37,19 @@ func TestMain(m *testing.M) {
 	defer c.Close()
 
 	if err := c.Load(); err != nil {
-		panic(err)
+		panic("loadErr: " + err.Error())
 	}
 
 	var bc conf.Bootstrap
 	if err := c.Scan(&bc); err != nil {
-		panic(err)
+		panic("ScanErr: " + err.Error())
 	}
 
 	logger := log.NewStdLogger(os.Stdout)
 
 	data, closeFunc, err := NewData(bc.GetData(), logger)
 	if err != nil {
-		panic(err)
+		panic("dataErr: " + err.Error())
 	}
 	defer closeFunc()
 	source = data

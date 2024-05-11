@@ -15,8 +15,8 @@ import (
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/transport/http"
-	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
 	"pt/internal/biz/constant"
@@ -428,8 +428,8 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			Infohash: infoHash,
 		}
 		lockString := httpBuildQueryString(lockParams)
-		lk := cacheKeyContactWithColon(constant.CacheKey_IsReAnnounceKey, string(md5.New().Sum([]byte(lockString))))
-		success, err := o.cache.Lock(ctx, lk, time.Now().Unix(), 20)
+		lk := cacheKeyLinkByColon(constant.CacheKey_IsReAnnounceKey, string(md5.New().Sum([]byte(lockString))))
+		success, err := o.cache.Lock(ctx, lk, 20*1000)
 		if err != nil {
 			return resp, err
 		}
@@ -438,8 +438,8 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		}
 
 		if !isReAnnounce {
-			rcLock := cacheKeyContactWithColon(constant.CacheKey_ReAnnounceCheckByAuthKey, subAuthkey)
-			success, err = o.cache.Lock(ctx, rcLock, time.Now().Unix(), 60)
+			rcLock := cacheKeyLinkByColon(constant.CacheKey_ReAnnounceCheckByAuthKey, subAuthkey)
+			success, err = o.cache.Lock(ctx, rcLock, 60*1000)
 			if err != nil {
 				return resp, err
 			}
@@ -448,7 +448,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			}
 		}
 
-		authInvalidKey := cacheKeyContactWithColon(constant.CacheKey_AuthKeyInvalidKey, authkey)
+		authInvalidKey := cacheKeyLinkByColon(constant.CacheKey_AuthKeyInvalidKey, authkey)
 		res, err := o.cache.Get(ctx, authInvalidKey)
 		if err != nil {
 			return resp, err
@@ -461,7 +461,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 
 		userAuthenticateKey = passkey
 
-		pInkey := cacheKeyContactWithColon(constant.CacheKey_PasskeyInvalidKey, passkey)
+		pInkey := cacheKeyLinkByColon(constant.CacheKey_PasskeyInvalidKey, passkey)
 		res, err := o.cache.Get(ctx, pInkey)
 		if err != nil {
 			return resp, err
@@ -475,11 +475,11 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			Passkey:  passkey,
 		}
 		lockString := httpBuildPasskeyQueryString(lockParams)
-		exist, err := o.cache.Lock(ctx, lockString, time.Now().Unix(), 20)
+		ok, err := o.cache.Lock(ctx, lockString, 20*1000)
 		if err != nil {
 			return resp, err
 		}
-		if !exist { //false 键已存在
+		if !ok { //false 键已存在
 			isReAnnounce = true
 		}
 
@@ -488,7 +488,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	}
 
 	// 判断种子是否存在
-	exist, err := o.cache.Get(ctx, cacheKeyContactWithColon(constant.CacheKey_TorrentNotExistsKey, infoHash))
+	exist, err := o.cache.Get(ctx, cacheKeyLinkByColon(constant.CacheKey_TorrentNotExistsKey, infoHash))
 	if err != nil {
 		return
 	}
@@ -499,11 +499,11 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	if !isReAnnounce {
 		torrentReAnnounceKey := fmt.Sprintf("reAnnounceCheckByInfoHash:%s:%s", userAuthenticateKey, infoHash)
 
-		exist, err := o.cache.Lock(ctx, torrentReAnnounceKey, time.Now().Unix(), 60)
+		ok, err := o.cache.Lock(ctx, torrentReAnnounceKey, 60*1000)
 		if err != nil {
 			return resp, err
 		}
-		if !exist { //false 键已存在
+		if !ok { //false 键已存在
 			return resp, errors.New("Request too frequent")
 		}
 	}
@@ -513,8 +513,8 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 	//check authkey //todo authKey not exist
 	user, err := o.urepo.GetByAuthkey(ctx, authkey)
 	if err != nil {
-		key := cacheKeyContactWithColon(constant.CacheKey_AuthKeyInvalidKey, authkey)
-		_, errLock := o.cache.Lock(ctx, key, time.Now().Unix(), 24*3600)
+		key := cacheKeyLinkByColon(constant.CacheKey_AuthKeyInvalidKey, authkey)
+		_, errLock := o.cache.Lock(ctx, key, 24*3600*1000)
 		if errLock != nil {
 			return resp, errLock
 		}
@@ -573,7 +573,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 		user, err = o.urepo.GetByPasskey(ctx, passkey)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				o.cache.Lock(ctx, cacheKeyContactWithColon(constant.CacheKey_PasskeyInvalidKey, passkey), time.Now().Unix(), 24*3600)
+				o.cache.Lock(ctx, cacheKeyLinkByColon(constant.CacheKey_PasskeyInvalidKey, passkey), 24*3600*1000)
 				return resp, errors.New("Invalid passkey! Re-download the .torrent")
 			}
 			return resp, err
@@ -618,7 +618,7 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			infoHashUrlEncode := queryString[start:end] //TODO 这里为什么用encode,缓存会Miss
 			o.log.Errorf("[TORRENT NOT EXISTS] params: %s, infoHashUrlEncode: %s\n", queryString, infoHashUrlEncode)
 			o.cache.Set(ctx,
-				cacheKeyContactWithColon(constant.CacheKey_TorrentNotExistsKey, infoHashUrlEncode),
+				cacheKeyLinkByColon(constant.CacheKey_TorrentNotExistsKey, infoHashUrlEncode),
 				time.Now().Format(time.RFC3339), 24*3600)
 
 			return resp, errors.Wrap(err, "torrent not registered with this tracker")
@@ -638,9 +638,9 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 
 	if authKeyTid != "" && authKeyTid != strconv.FormatInt(int64(torrent.ID), 10) {
 		err = errors.New("Invalid authkey")
-		_, errT := o.cache.Lock(ctx, cacheKeyContactWithColon(constant.CacheKey_AuthKeyInvalidKey, authkey), time.Now().Unix(), 24*3600)
+		_, errT := o.cache.Lock(ctx, cacheKeyLinkByColon(constant.CacheKey_AuthKeyInvalidKey, authkey), 24*3600*1000)
 		if errT != nil {
-			o.log.Errorw("cacheKeyContactWithColon")
+			o.log.Errorw("cacheKeyLinkByColon")
 		}
 		return
 	}
@@ -907,14 +907,22 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 				}
 				// 刷新缓存
 				lockKey := getTorrentBuyLoadUserLockKey(user.Id)
-				ok, _ := o.cache.Lock(ctx, lockKey, "1", 300*time.Millisecond) // todo 这里不会等待
+				ok, err := o.cache.Lock(ctx, lockKey, 3000)
+				if err != nil {
+					return resp, err
+				}
+
+				// 拿到锁
 				if ok {
-					//executeCommand("torrent:load_bought_user $torrentid", "string", true, false);
+					// executeCommand("torrent:load_bought_user $torrentid", "string", true, false);
 					err = o.refreshHasBuyLogs(ctx, torrent.ID)
 					if err != nil {
 						return resp, err
 					}
+				} else {
+					time.Sleep(300 * time.Millisecond) // todo 优化成singleFlight
 				}
+
 				// note: 这里将原有string,改为hget
 				// $hasBuy = \Nexus\Database\NexusDB::remember(sprintf("user_has_buy_torrent:%s:%s", $userid, $torrentid), 86400*10, function () use($userid, $torrentid) {
 				// 	$exists = \App\Models\TorrentBuyLog::query()->where('uid', $userid)->where('torrent_id', $torrentid)->exists();
@@ -926,16 +934,21 @@ func (o *TrackerAnnounceUsecase) AnounceHandler(ctx http.Context) (resp Announce
 			if !hasBuy {
 
 				lockKey := fmt.Sprintf("buying_torrent:%d", user.Id)
-				_, err = o.cache.Lock(ctx, lockKey, "1", 5*time.Second) //TODO 5s?  $lock = new \Nexus\Database\NexusLock("", 5);
-				if err != nil {
-					return resp, errors.New("buying torrent, wait!")
-				}
-
-				_, err := o.consumeToBuyTorrent(ctx, user.Id, torrent.ID, "Web")
+				ok, err := o.cache.Lock(ctx, lockKey, 5*1000) //TODO 5s?  $lock = new \Nexus\Database\NexusLock("", 5);
 				if err != nil {
 					return resp, err
 				}
+				if !ok {
+					return resp, errors.New("buying torrent, wait!")
+				}
+
+				_, err = o.consumeToBuyTorrent(ctx, user.Id, torrent.ID, "Web")
+				if err != nil {
+					o.cache.Del(ctx, []string{lockKey})
+					return resp, err
+				}
 				o.cache.HSet(ctx, hasBuyCacheKey, strconv.FormatInt(user.Id, 10), true)
+				o.cache.Del(ctx, []string{lockKey})
 				//$lock->release();
 			}
 
@@ -1782,7 +1795,7 @@ func getTorrentBuyUserCacheKey(tid int64) string {
 	return fmt.Sprintf(constant.CACHE_KEY_BOUGHT_USER_PREFIX, tid)
 }
 
-func cacheKeyContactWithColon(key, body string) string {
+func cacheKeyLinkByColon(key, body string) string {
 	return fmt.Sprintf("%s:%s", key, body)
 }
 

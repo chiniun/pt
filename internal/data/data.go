@@ -6,8 +6,9 @@ import (
 	comgorm "pt/internal/utils/gorm"
 	comredis "pt/internal/utils/redis"
 
+	"github.com/bsm/redislock"
 	"github.com/go-kratos/kratos/v2/log"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/google/wire"
 	"gorm.io/gorm"
 )
@@ -41,6 +42,7 @@ var ProviderSet = wire.NewSet(
 // Data .
 type Data struct {
 	redisCli *redis.Client
+	locker   *redislock.Client
 	DB       *gorm.DB
 }
 
@@ -50,6 +52,7 @@ func NewData(c *conf.Data, logger log.Logger) (*Data, func(), error) {
 
 	db := comgorm.NewMySQLWithPanic(c.GetMysql(), logger)
 	redisCli := comredis.NewWithPanic(c.GetRedis(), logger)
+	locker := redislock.New(redisCli)
 
 	cleanup := func() {
 		log.NewHelper(logger).Info("closing the data resources")
@@ -59,5 +62,6 @@ func NewData(c *conf.Data, logger log.Logger) (*Data, func(), error) {
 	return &Data{
 		DB:       db,
 		redisCli: redisCli,
+		locker:   locker,
 	}, cleanup, nil
 }
