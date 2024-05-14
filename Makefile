@@ -67,6 +67,33 @@ all:
 local:
 	go run ./cmd/*/ -conf configs/config_test.yaml
 
+.PHONY:docker-clean
+# 关闭并清理已运行docker容器以及删除本地镜像
+docker-clean:
+	@docker stop ptc \
+	&& docker rm ptc \
+	&& docker rmi pti \
+
+.PHONY: docker-build
+# 编译成docker镜像
+docker-build:
+	rm -rf ./bin && docker build . -t pti
+
+.PHONY: docker-run
+# 运行docker容器并暴露端口
+docker-run:
+	 docker run -d --name ptc -p 8000:8000 -p 9000:9000 pti
+
+.PHONY: docker-all
+docker-all:
+# 执行编译运行docker命令
+	make docker-build;
+	make docker-run;
+
+.PHONY:docker-log
+docker-log:
+# docker logs ptc 此命令可查看docker运行ptc容器失败原因
+	docker logs ptc
 
 
 # show help
